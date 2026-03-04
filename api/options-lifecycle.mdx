@@ -1,0 +1,438 @@
+---
+title: Options - Lifecycle
+---
+
+## beforeCreate
+
+<ParamField path="beforeCreate" type="Function">
+  Called immediately when the instance is initialized, after props resolution, before processing other options such as `data()` or `computed`.
+
+  Note that the `setup()` hook of Composition API is called before any Options API hooks, even `beforeCreate()`.
+
+  At this stage:
+  - Props have been resolved
+  - Data, computed properties, methods, and watchers have not been set up yet
+  - The component instance exists, but reactive state is not available
+
+  **Example:**
+  ```js
+  export default {
+    beforeCreate() {
+      console.log('Component is about to be created')
+      // this.$data is not available yet
+    }
+  }
+  ```
+</ParamField>
+
+## created
+
+<ParamField path="created" type="Function">
+  Called after the instance has finished processing all state-related options.
+
+  When this hook is called, the following have been set up:
+  - Reactive data
+  - Computed properties
+  - Methods
+  - Watchers
+
+  However, the mounting phase has not been started, and the `$el` property will not be available yet.
+
+  This is a good place to perform data fetching or set up subscriptions.
+
+  **Example:**
+  ```js
+  export default {
+    data() {
+      return {
+        users: []
+      }
+    },
+    created() {
+      // data is available
+      console.log(this.users) // []
+      
+      // good place to fetch data
+      this.fetchUsers()
+    },
+    methods: {
+      async fetchUsers() {
+        const response = await fetch('/api/users')
+        this.users = await response.json()
+      }
+    }
+  }
+  ```
+</ParamField>
+
+## beforeMount
+
+<ParamField path="beforeMount" type="Function">
+  Called right before the component is to be mounted.
+
+  When this hook is called:
+  - The component has finished setting up its reactive state
+  - The render function is about to be called for the first time
+  - No DOM has been created yet
+
+  **This hook is not called during server-side rendering.**
+
+  **Example:**
+  ```js
+  export default {
+    beforeMount() {
+      console.log('About to mount component')
+      console.log(this.$el) // undefined - DOM not created yet
+    }
+  }
+  ```
+</ParamField>
+
+## mounted
+
+<ParamField path="mounted" type="Function">
+  Called after the component has been mounted.
+
+  A component is considered mounted after:
+  - All of its synchronous child components have been mounted (does not include async components or components inside `<Suspense>` trees)
+  - Its own DOM tree has been created and inserted into the parent container
+
+  This hook is typically used for:
+  - Accessing the DOM via `$el` or refs
+  - Integrating with non-Vue libraries that require DOM access
+  - Starting timers or intervals
+  - Setting up subscriptions
+
+  Note that this hook is not called during server-side rendering.
+
+  **Example:**
+  ```js
+  export default {
+    mounted() {
+      // DOM is now available
+      console.log(this.$el) // the root DOM element
+      
+      // can access refs
+      console.log(this.$refs.input)
+      
+      // good place to initialize third-party libraries
+      this.initChart()
+    },
+    methods: {
+      initChart() {
+        // initialize chart library with DOM element
+      }
+    }
+  }
+  ```
+</ParamField>
+
+## beforeUpdate
+
+<ParamField path="beforeUpdate" type="Function">
+  Called right before the component is about to update its DOM tree due to a reactive state change.
+
+  This hook can be used to access the DOM state before Vue updates the DOM. It is also safe to modify component state inside this hook.
+
+  **This hook is not called during server-side rendering.**
+
+  **Example:**
+  ```js
+  export default {
+    data() {
+      return {
+        count: 0
+      }
+    },
+    beforeUpdate() {
+      console.log('DOM will be updated')
+      // Access DOM before update
+      console.log(this.$el.textContent)
+    }
+  }
+  ```
+</ParamField>
+
+## updated
+
+<ParamField path="updated" type="Function">
+  Called after the component has updated its DOM tree due to a reactive state change.
+
+  A parent component's updated hook is called after that of its child components.
+
+  This hook is called after any DOM update of the component, which can be caused by different state changes. If you need to access the updated DOM after a specific state change, use `nextTick()` instead.
+
+  **This hook is not called during server-side rendering.**
+
+  **Warning:** Do not mutate component state in the updated hook - this will likely lead to an infinite update loop!
+
+  **Example:**
+  ```js
+  export default {
+    data() {
+      return {
+        count: 0
+      }
+    },
+    updated() {
+      // DOM has been updated
+      console.log('Component updated')
+      
+      // Access updated DOM
+      console.log(this.$el.textContent)
+    }
+  }
+  ```
+</ParamField>
+
+## beforeUnmount
+
+<ParamField path="beforeUnmount" type="Function">
+  Called right before a component instance is to be unmounted.
+
+  When this hook is called:
+  - The component instance is still fully functional
+  - All child components are still mounted
+
+  This is the place to clean up any side effects like timers, subscriptions, or event listeners.
+
+  **This hook is not called during server-side rendering.**
+
+  **Example:**
+  ```js
+  export default {
+    data() {
+      return {
+        timer: null
+      }
+    },
+    mounted() {
+      this.timer = setInterval(() => {
+        console.log('tick')
+      }, 1000)
+    },
+    beforeUnmount() {
+      // Clean up timer
+      if (this.timer) {
+        clearInterval(this.timer)
+      }
+    }
+  }
+  ```
+</ParamField>
+
+## unmounted
+
+<ParamField path="unmounted" type="Function">
+  Called after the component has been unmounted.
+
+  A component is considered unmounted after:
+  - All of its child components have been unmounted
+  - All of its associated reactive effects (render effect and computed / watchers created during `setup()`) have been stopped
+
+  Use this hook to clean up manually created side effects such as timers, DOM event listeners or server connections.
+
+  **This hook is not called during server-side rendering.**
+
+  **Example:**
+  ```js
+  export default {
+    mounted() {
+      window.addEventListener('resize', this.handleResize)
+    },
+    beforeUnmount() {
+      window.removeEventListener('resize', this.handleResize)
+    },
+    unmounted() {
+      console.log('Component has been unmounted')
+      // Additional cleanup if needed
+    },
+    methods: {
+      handleResize() {
+        console.log('Window resized')
+      }
+    }
+  }
+  ```
+</ParamField>
+
+## errorCaptured
+
+<ParamField path="errorCaptured" type="(err: Error, instance: ComponentPublicInstance | null, info: string) => boolean | void">
+  Called when an error from any descendent component has been captured.
+
+  The hook receives three arguments:
+  1. The error object
+  2. The component instance that triggered the error
+  3. A string specifying the error source type
+
+  The hook can return `false` to stop the error from propagating further. See error propagation details below.
+
+  **Error Propagation Rules:**
+
+  By default, all errors are sent to the application-level `app.config.errorHandler` if it is defined, so that these errors can be reported to an analytics service in a single place.
+
+  If multiple `errorCaptured` hooks exist on a component's inheritance chain or parent chain, all of them will be invoked on the same error, in the order from bottom to top. This is similar to the bubbling mechanism of native DOM events.
+
+  If the `errorCaptured` hook itself throws an error, both this error and the original captured error are sent to `app.config.errorHandler`.
+
+  An `errorCaptured` hook can return `false` to prevent the error from propagating further. This essentially says "this error has been handled and should be ignored." It will prevent any additional `errorCaptured` hooks or `app.config.errorHandler` from being invoked for this error.
+
+  **Example:**
+  ```js
+  export default {
+    errorCaptured(err, instance, info) {
+      console.error('Error captured:', err)
+      console.log('Error info:', info)
+      console.log('Component:', instance)
+      
+      // Return false to prevent error propagation
+      return false
+    }
+  }
+  ```
+</ParamField>
+
+## renderTracked <Badge type="dev-only" text="dev only" />
+
+<ParamField path="renderTracked" type="(e: DebuggerEvent) => void">
+  Called when a reactive dependency has been tracked by the component's render effect.
+
+  **This hook is development-mode-only and not called during server-side rendering.**
+
+  The event object contains information about which dependency was tracked.
+
+  **Example:**
+  ```js
+  export default {
+    renderTracked(e) {
+      console.log('Dependency tracked:', e)
+      // Inspect which dependency was tracked
+      console.log(e.target) // the reactive object
+      console.log(e.key) // the property key
+      console.log(e.type) // 'get'
+    }
+  }
+  ```
+</ParamField>
+
+## renderTriggered <Badge type="dev-only" text="dev only" />
+
+<ParamField path="renderTriggered" type="(e: DebuggerEvent) => void">
+  Called when a reactive dependency triggers the component's render effect to re-run.
+
+  **This hook is development-mode-only and not called during server-side rendering.**
+
+  The event object contains information about which dependency triggered the update.
+
+  **Example:**
+  ```js
+  export default {
+    renderTriggered(e) {
+      console.log('Re-render triggered by:', e)
+      // Inspect which dependency caused the re-render
+      console.log(e.target) // the reactive object
+      console.log(e.key) // the property key that changed
+      console.log(e.type) // 'set' or 'add' or 'delete'
+      console.log(e.newValue) // new value
+      console.log(e.oldValue) // old value
+    }
+  }
+  ```
+</ParamField>
+
+## activated
+
+<ParamField path="activated" type="Function">
+  Called when a component instance is inserted into the DOM as part of a tree cached by `<KeepAlive>`.
+
+  **This hook is not called during server-side rendering.**
+
+  This hook is only applicable to components wrapped by `<KeepAlive>`. It is called each time a cached component is re-activated.
+
+  **Example:**
+  ```js
+  export default {
+    activated() {
+      console.log('Component activated from KeepAlive cache')
+      // Refresh data or restart subscriptions
+      this.fetchLatestData()
+    },
+    methods: {
+      fetchLatestData() {
+        // fetch fresh data
+      }
+    }
+  }
+  ```
+</ParamField>
+
+## deactivated
+
+<ParamField path="deactivated" type="Function">
+  Called when a component instance is removed from the DOM as part of a tree cached by `<KeepAlive>`.
+
+  **This hook is not called during server-side rendering.**
+
+  This hook is only applicable to components wrapped by `<KeepAlive>`. It is called each time a component is deactivated and cached.
+
+  **Example:**
+  ```js
+  export default {
+    deactivated() {
+      console.log('Component deactivated and cached')
+      // Pause subscriptions or clean up temporary state
+      this.pauseSubscriptions()
+    },
+    methods: {
+      pauseSubscriptions() {
+        // pause active subscriptions
+      }
+    }
+  }
+  ```
+</ParamField>
+
+## serverPrefetch <Badge type="ssr-only" text="SSR only" />
+
+<ParamField path="serverPrefetch" type="() => Promise<any>">
+  Async function to be resolved before the component instance is rendered on the server.
+
+  If the hook returns a Promise, the server renderer will wait for that Promise to resolve before rendering the component.
+
+  This hook is only called during server-side rendering and can be used to perform server-only data fetching.
+
+  **Example:**
+  ```js
+  export default {
+    data() {
+      return {
+        data: null
+      }
+    },
+    async serverPrefetch() {
+      // component is rendered as part of the initial request
+      // pre-fetch data on server as it is faster than on the client
+      this.data = await this.fetchOnServer()
+    },
+    async mounted() {
+      if (!this.data) {
+        // if data is null on mount, it means the component
+        // is dynamically rendered on the client. Perform a
+        // client-side fetch instead.
+        this.data = await this.fetchOnClient()
+      }
+    },
+    methods: {
+      async fetchOnServer() {
+        // server-side fetch
+        return fetch('https://api.example.com/data')
+      },
+      async fetchOnClient() {
+        // client-side fetch
+        return fetch('https://api.example.com/data')
+      }
+    }
+  }
+  ```
+</ParamField>

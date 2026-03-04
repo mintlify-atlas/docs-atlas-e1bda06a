@@ -1,0 +1,538 @@
+---
+title: Provide / Inject
+description: Learn about dependency injection with provide and inject in Vue.js components
+---
+
+## Overview
+
+Provide and inject enable dependency injection in Vue components, allowing ancestor components to serve as dependency providers for all descendants, regardless of component hierarchy depth.
+
+## Basic Usage
+
+### Providing Values
+
+```vue
+<script setup>
+import { provide } from 'vue'
+
+provide('message', 'hello')
+</script>
+```
+
+### Injecting Values
+
+```vue
+<script setup>
+import { inject } from 'vue'
+
+const message = inject('message')
+console.log(message) // 'hello'
+</script>
+```
+
+## Function Signatures
+
+### provide
+
+```ts
+export function provide<T, K = InjectionKey<T> | string | number>(
+  key: K,
+  value: K extends InjectionKey<infer V> ? V : T,
+): void
+```
+
+Source: `runtime-core/src/apiInject.ts:10-13`
+
+### inject
+
+```ts
+// Without default
+export function inject<T>(key: InjectionKey<T> | string): T | undefined
+
+// With default value
+export function inject<T>(
+  key: InjectionKey<T> | string,
+  defaultValue: T,
+  treatDefaultAsFactory?: false,
+): T
+
+// With factory default
+export function inject<T>(
+  key: InjectionKey<T> | string,
+  defaultValue: T | (() => T),
+  treatDefaultAsFactory: true,
+): T
+```
+
+Source: `runtime-core/src/apiInject.ts:36-46`
+
+## Type-Safe Injection
+
+### InjectionKey
+
+Use `InjectionKey` for type-safe provide/inject:
+
+```ts
+import { provide, inject, InjectionKey } from 'vue'
+
+// Define the key with type
+const MessageKey: InjectionKey<string> = Symbol('message')
+
+// Provide
+provide(MessageKey, 'hello')
+
+// Inject (type is automatically inferred)
+const message = inject(MessageKey) // string | undefined
+```
+
+Source: `runtime-core/src/apiInject.ts:8`
+
+### Shared Keys File
+
+Create a shared file for injection keys:
+
+```ts
+// keys.ts
+import type { InjectionKey, Ref } from 'vue'
+
+export interface User {
+  id: number
+  name: string
+}
+
+export const UserKey: InjectionKey<Ref<User>> = Symbol('user')
+export const ThemeKey: InjectionKey<Ref<string>> = Symbol('theme')
+```
+
+```vue
+<!-- Provider.vue -->
+<script setup lang="ts">
+import { provide, ref } from 'vue'
+import { UserKey } from './keys'
+
+const user = ref({ id: 1, name: 'John' })
+provide(UserKey, user)
+</script>
+```
+
+```vue
+<!-- Consumer.vue -->
+<script setup lang="ts">
+import { inject } from 'vue'
+import { UserKey } from './keys'
+
+const user = inject(UserKey) // Ref<User> | undefined
+</script>
+```
+
+## Default Values
+
+### Static Defaults
+
+```ts
+const message = inject('message', 'default message')
+```
+
+### Factory Defaults
+
+For expensive computations, use factory functions:
+
+```ts
+const data = inject(
+  'data',
+  () => ({ items: [] }),
+  true  // treat as factory
+)
+```
+
+Source: `runtime-core/src/apiInject.ts:42-46`
+
+## Reactivity
+
+### Providing Reactive Data
+
+```vue
+<script setup>
+import { provide, ref, readonly } from 'vue'
+
+const count = ref(0)
+
+function increment() {
+  count.value++
+}
+
+// Provide both state and methods
+provide('count', readonly(count))
+provide('increment', increment)
+</script>
+```
+
+### Injecting Reactive Data
+
+```vue
+<script setup>
+import { inject } from 'vue'
+
+const count = inject('count')
+const increment = inject('increment')
+</script>
+
+<template>
+  <div>
+    <p>Count: {{ count }}</p>
+    <button @click="increment">Increment</button>
+  </div>
+</template>
+```
+
+## Readonly Injection
+
+Prevent child components from mutating provided state:
+
+```vue
+<script setup>
+import { provide, ref, readonly } from 'vue'
+
+const state = ref({ count: 0 })
+
+// Provide readonly version
+provide('state', readonly(state))
+
+// Provide mutation methods
+provide('setState', (newState) => {
+  state.value = newState
+})
+</script>
+```
+
+## Implementation Details
+
+### provide Implementation
+
+```ts
+export function provide<T, K = InjectionKey<T> | string | number>(
+  key: K,
+  value: K extends InjectionKey<infer V> ? V : T,
+): void {
+  if (currentInstance) {
+    let provides = currentInstance.provides
+    // by default an instance inherits its parent's provides object
+    // but when it needs to provide values of its own, it creates its
+    // own provides object using parent provides object as prototype.
+    // this way in `inject` we can simply look up injections from direct
+    // parent and let the prototype chain do the work.
+    const parentProvides =
+      currentInstance.parent && currentInstance.parent.provides
+    if (parentProvides === provides) {
+      provides = currentInstance.provides = Object.create(parentProvides)
+    }
+    provides[key as string] = value
+  }
+}
+```
+
+Source: `runtime-core/src/apiInject.ts:10-34`
+
+### inject Implementation
+
+```ts
+export function inject(
+  key: InjectionKey<any> | string,
+  defaultValue?: unknown,
+  treatDefaultAsFactory = false,
+) {
+  const instance = getCurrentInstance()
+
+  if (instance || currentApp) {
+    let provides = currentApp
+      ? currentApp._context.provides
+      : instance
+        ? instance.parent == null || instance.ce
+          ? instance.vnode.appContext && instance.vnode.appContext.provides
+          : instance.parent.provides
+        : undefined
+
+    if (provides && (key as string | symbol) in provides) {
+      return provides[key as string]
+    } else if (arguments.length > 1) {
+      return treatDefaultAsFactory && isFunction(defaultValue)
+        ? defaultValue.call(instance && instance.proxy)
+        : defaultValue
+    } else if (__DEV__) {
+      warn(`injection "${String(key)}" not found.`)
+    }
+  }
+}
+```
+
+Source: `runtime-core/src/apiInject.ts:47-85`
+
+## Injection Context
+
+### hasInjectionContext
+
+Check if inject can be safely called:
+
+```ts
+export function hasInjectionContext(): boolean {
+  return !!(getCurrentInstance() || currentApp)
+}
+```
+
+Source: `runtime-core/src/apiInject.ts:92-94`
+
+Useful for library authors:
+
+```ts
+import { inject, hasInjectionContext } from 'vue'
+
+export function useRouter() {
+  if (!hasInjectionContext()) {
+    throw new Error('useRouter must be called inside setup()')
+  }
+  return inject(RouterKey)!
+}
+```
+
+## App-Level Provide
+
+### Global Providers
+
+```ts
+import { createApp } from 'vue'
+import App from './App.vue'
+
+const app = createApp(App)
+
+app.provide('message', 'hello from app')
+
+app.mount('#app')
+```
+
+### Plugin Injection
+
+```ts
+// plugin.ts
+import type { App } from 'vue'
+
+const MyPlugin = {
+  install(app: App, options: any) {
+    app.provide('pluginOptions', options)
+  }
+}
+
+export default MyPlugin
+```
+
+```ts
+// main.ts
+import MyPlugin from './plugin'
+
+app.use(MyPlugin, { apiUrl: 'https://api.example.com' })
+```
+
+## Common Patterns
+
+### Theme Provider
+
+```vue
+<!-- ThemeProvider.vue -->
+<script setup lang="ts">
+import { provide, ref, readonly } from 'vue'
+import type { InjectionKey, Ref } from 'vue'
+
+export const ThemeKey: InjectionKey<{
+  theme: Readonly<Ref<string>>
+  setTheme: (theme: string) => void
+}> = Symbol('theme')
+
+const theme = ref('light')
+
+function setTheme(newTheme: string) {
+  theme.value = newTheme
+}
+
+provide(ThemeKey, {
+  theme: readonly(theme),
+  setTheme
+})
+</script>
+
+<template>
+  <div :class="`theme-${theme}`">
+    <slot></slot>
+  </div>
+</template>
+```
+
+```vue
+<!-- Child.vue -->
+<script setup lang="ts">
+import { inject } from 'vue'
+import { ThemeKey } from './ThemeProvider.vue'
+
+const themeContext = inject(ThemeKey)!
+const { theme, setTheme } = themeContext
+</script>
+
+<template>
+  <div>
+    <p>Current theme: {{ theme }}</p>
+    <button @click="setTheme('dark')">Dark</button>
+    <button @click="setTheme('light')">Light</button>
+  </div>
+</template>
+```
+
+### Store Provider
+
+```ts
+// store.ts
+import { reactive, readonly, InjectionKey } from 'vue'
+
+interface State {
+  count: number
+  user: { name: string } | null
+}
+
+export interface Store {
+  state: Readonly<State>
+  increment(): void
+  setUser(name: string): void
+}
+
+export const StoreKey: InjectionKey<Store> = Symbol('store')
+
+export function createStore(): Store {
+  const state = reactive<State>({
+    count: 0,
+    user: null
+  })
+
+  function increment() {
+    state.count++
+  }
+
+  function setUser(name: string) {
+    state.user = { name }
+  }
+
+  return {
+    state: readonly(state),
+    increment,
+    setUser
+  }
+}
+```
+
+```vue
+<!-- App.vue -->
+<script setup>
+import { provide } from 'vue'
+import { StoreKey, createStore } from './store'
+
+const store = createStore()
+provide(StoreKey, store)
+</script>
+```
+
+```vue
+<!-- Component.vue -->
+<script setup>
+import { inject } from 'vue'
+import { StoreKey } from './store'
+
+const store = inject(StoreKey)!
+</script>
+
+<template>
+  <div>
+    <p>Count: {{ store.state.count }}</p>
+    <button @click="store.increment">Increment</button>
+  </div>
+</template>
+```
+
+### API Client Provider
+
+```ts
+// api.ts
+import { InjectionKey } from 'vue'
+
+export interface ApiClient {
+  get<T>(url: string): Promise<T>
+  post<T>(url: string, data: any): Promise<T>
+}
+
+export const ApiKey: InjectionKey<ApiClient> = Symbol('api')
+
+export function createApiClient(baseUrl: string): ApiClient {
+  return {
+    async get<T>(url: string): Promise<T> {
+      const response = await fetch(`${baseUrl}${url}`)
+      return response.json()
+    },
+    async post<T>(url: string, data: any): Promise<T> {
+      const response = await fetch(`${baseUrl}${url}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      return response.json()
+    }
+  }
+}
+```
+
+```ts
+// main.ts
+import { createApp } from 'vue'
+import { ApiKey, createApiClient } from './api'
+import App from './App.vue'
+
+const app = createApp(App)
+const api = createApiClient('https://api.example.com')
+
+app.provide(ApiKey, api)
+app.mount('#app')
+```
+
+## Best Practices
+
+1. **Use InjectionKey** for type safety in TypeScript
+2. **Provide readonly refs** to prevent child mutations
+3. **Create composable factories** for complex providers
+4. **Document injection keys** in a shared file
+5. **Provide mutation methods** alongside state
+6. **Check injection context** in reusable composables
+7. **Use Symbol keys** to avoid naming conflicts
+8. **Provide defaults** for optional injections
+
+## Comparison with Props
+
+### When to Use Provide/Inject
+
+- Passing data through many layers of components
+- Sharing global/feature-level state
+- Plugin and library APIs
+- Avoiding prop drilling
+
+### When to Use Props
+
+- Direct parent-child communication
+- Explicit component APIs
+- Type-safe component contracts
+- Better refactoring support
+
+## Limitations
+
+1. **Not reactive by default**: Wrap values in refs for reactivity
+2. **Prototype chain lookup**: May impact performance in deep hierarchies
+3. **Implicit dependencies**: Less obvious than props
+4. **Testing complexity**: Requires proper test setup
+
+## Related APIs
+
+- [Props](/components/props) - Learn about component props
+- [Composables](/guide/composables) - Learn about reusable composition functions
+- [Application API](/api/application) - Learn about app-level APIs

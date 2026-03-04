@@ -1,0 +1,499 @@
+---
+title: Custom Directives
+description: Learn how to create custom directives to apply low-level DOM manipulations and reusable behavior in Vue.js.
+---
+
+# Custom Directives
+
+Custom directives provide a way to reuse logic that involves low-level DOM access. While composables are the primary way to reuse logic in Vue 3, directives are still useful when you need direct DOM manipulation.
+
+## When to Use Directives
+
+Use custom directives when you need to:
+
+- Directly manipulate DOM elements
+- Apply reusable DOM-related behavior
+- Integrate third-party DOM libraries
+- Handle focus, animations, or other DOM-specific concerns
+
+**Note**: Prefer composables for reusing stateful logic. Use directives only when DOM manipulation is necessary.
+
+## Directive Hooks
+
+Based on `runtime-core/src/directives.ts`, custom directives are objects with lifecycle hooks:
+
+```typescript
+interface ObjectDirective {
+  created?: DirectiveHook      // Before element attributes/listeners applied
+  beforeMount?: DirectiveHook  // Before element inserted into DOM
+  mounted?: DirectiveHook      // After element inserted and parent mounted
+  beforeUpdate?: DirectiveHook // Before parent component updates
+  updated?: DirectiveHook      // After parent component and children updated
+  beforeUnmount?: DirectiveHook // Before element unmounted
+  unmounted?: DirectiveHook    // After element unmounted
+  getSSRProps?: SSRDirectiveHook // For SSR rendering
+}
+```
+
+Each hook receives these arguments:
+
+```typescript
+type DirectiveHook = (
+  el: HTMLElement,              // The element the directive is bound to
+  binding: DirectiveBinding,    // Object containing directive data
+  vnode: VNode,                 // Current virtual node
+  prevVNode: VNode | null       // Previous virtual node
+) => void
+```
+
+## Directive Binding Object
+
+The `binding` argument provides:
+
+```typescript
+interface DirectiveBinding {
+  value: any           // Value passed to directive
+  oldValue: any        // Previous value
+  arg?: string         // Argument passed to directive (e.g., v-my-directive:arg)
+  modifiers: Record<string, boolean> // Object of modifiers (e.g., v-my-directive.foo.bar)
+  instance: ComponentPublicInstance | null // Instance of component
+  dir: ObjectDirective // The directive definition
+}
+```
+
+## Basic Example
+
+Here's a simple directive that focuses an input when mounted:
+
+```javascript
+const vFocus = {
+  mounted: (el) => el.focus()
+}
+```
+
+Usage in a component:
+
+```vue
+<script setup>
+const vFocus = {
+  mounted: (el) => el.focus()
+}
+</script>
+
+<template>
+  <input v-focus />
+</template>
+```
+
+## Function Shorthand
+
+When you only need `mounted` and `updated` hooks with the same behavior, use function syntax:
+
+```javascript
+// Function directive - called on mounted and updated
+const vColor = (el, binding) => {
+  el.style.color = binding.value
+}
+```
+
+This is equivalent to:
+
+```javascript
+const vColor = {
+  mounted: (el, binding) => {
+    el.style.color = binding.value
+  },
+  updated: (el, binding) => {
+    el.style.color = binding.value
+  }
+}
+```
+
+## Real-World Example: v-show
+
+Let's examine Vue's built-in `v-show` directive from `runtime-dom/src/directives/vShow.ts`:
+
+```javascript
+export const vShow = {
+  beforeMount(el, { value }, { transition }) {
+    // Store original display value
+    el._vod = el.style.display === 'none' ? '' : el.style.display
+    if (transition && value) {
+      transition.beforeEnter(el)
+    } else {
+      setDisplay(el, value)
+    }
+  },
+  
+  mounted(el, { value }, { transition }) {
+    if (transition && value) {
+      transition.enter(el)
+    }
+  },
+  
+  updated(el, { value, oldValue }, { transition }) {
+    if (!value === !oldValue) return
+    if (transition) {
+      if (value) {
+        transition.beforeEnter(el)
+        setDisplay(el, true)
+        transition.enter(el)
+      } else {
+        transition.leave(el, () => {
+          setDisplay(el, false)
+        })
+      }
+    } else {
+      setDisplay(el, value)
+    }
+  },
+  
+  beforeUnmount(el, { value }) {
+    setDisplay(el, value)
+  }
+}
+
+function setDisplay(el, value) {
+  el.style.display = value ? el._vod : 'none'
+}
+```
+
+## Directive with Arguments and Modifiers
+
+Directives can accept arguments and modifiers:
+
+```javascript
+const vPin = {
+  mounted(el, binding) {
+    const { value, arg, modifiers } = binding
+    
+    // v-pin:top.fixed="200"
+    // arg = 'top'
+    // modifiers = { fixed: true }
+    // value = 200
+    
+    if (modifiers.fixed) {
+      el.style.position = 'fixed'
+    }
+    
+    el.style[arg] = value + 'px'
+  },
+  
+  updated(el, binding) {
+    const { value, arg, oldValue } = binding
+    if (value !== oldValue) {
+      el.style[arg] = value + 'px'
+    }
+  }
+}
+```
+
+Usage:
+
+```vue
+<template>
+  <div v-pin:top.fixed="200">Pinned 200px from top</div>
+</template>
+```
+
+## Advanced Example: Click Outside
+
+A common pattern for closing dropdowns/modals when clicking outside:
+
+```javascript
+const vClickOutside = {
+  mounted(el, binding) {
+    el._clickOutside = (event) => {
+      // Check if click was outside element
+      if (!(el === event.target || el.contains(event.target))) {
+        // Call provided method
+        binding.value(event)
+      }
+    }
+    document.addEventListener('click', el._clickOutside)
+  },
+  
+  unmounted(el) {
+    document.removeEventListener('click', el._clickOutside)
+    delete el._clickOutside
+  }
+}
+```
+
+Usage:
+
+```vue
+<script setup>
+import { ref } from 'vue'
+
+const isOpen = ref(false)
+const close = () => isOpen.value = false
+</script>
+
+<template>
+  <div v-if="isOpen" v-click-outside="close">
+    <p>Click outside to close</p>
+  </div>
+</template>
+```
+
+## Registering Directives
+
+### Local Registration
+
+Register in a single component:
+
+```vue
+<script setup>
+const vFocus = {
+  mounted: (el) => el.focus()
+}
+</script>
+
+<template>
+  <input v-focus />
+</template>
+```
+
+With Options API:
+
+```javascript
+export default {
+  directives: {
+    focus: {
+      mounted(el) {
+        el.focus()
+      }
+    }
+  }
+}
+```
+
+### Global Registration
+
+Register globally using `app.directive()`:
+
+```javascript
+const app = createApp(App)
+
+// Register directive
+app.directive('focus', {
+  mounted(el) {
+    el.focus()
+  }
+})
+
+app.mount('#app')
+```
+
+Based on `runtime-core/src/apiCreateApp.ts`, the directive method signature is:
+
+```typescript
+app.directive(name: string): Directive | undefined        // Get directive
+app.directive(name: string, directive: Directive): App   // Register directive
+```
+
+## Directive with Reactive Data
+
+Directives can work with reactive values:
+
+```javascript
+import { watch } from 'vue'
+
+const vTooltip = {
+  mounted(el, binding) {
+    // Create tooltip element
+    const tooltip = document.createElement('div')
+    tooltip.className = 'tooltip'
+    tooltip.textContent = binding.value
+    tooltip.style.display = 'none'
+    document.body.appendChild(tooltip)
+    
+    el._tooltip = tooltip
+    
+    // Show on hover
+    el.addEventListener('mouseenter', () => {
+      const rect = el.getBoundingClientRect()
+      tooltip.style.display = 'block'
+      tooltip.style.left = rect.left + 'px'
+      tooltip.style.top = (rect.top - tooltip.offsetHeight) + 'px'
+    })
+    
+    el.addEventListener('mouseleave', () => {
+      tooltip.style.display = 'none'
+    })
+  },
+  
+  updated(el, binding) {
+    // Update tooltip text when value changes
+    el._tooltip.textContent = binding.value
+  },
+  
+  unmounted(el) {
+    // Cleanup
+    el._tooltip.remove()
+    delete el._tooltip
+  }
+}
+```
+
+## Deep Watching
+
+Directives can opt into deep watching of objects:
+
+```javascript
+const vTrackChanges = {
+  // Enable deep watching
+  deep: true,
+  
+  mounted(el, binding) {
+    console.log('Initial value:', binding.value)
+  },
+  
+  updated(el, binding) {
+    // Will trigger even for nested property changes
+    console.log('Updated value:', binding.value)
+  }
+}
+```
+
+Usage:
+
+```vue
+<template>
+  <!-- Will trigger updated hook when user.name changes -->
+  <div v-track-changes="user"></div>
+</template>
+```
+
+## SSR Support
+
+For server-side rendering, implement `getSSRProps`:
+
+```javascript
+const vShow = {
+  // ... other hooks
+  
+  getSSRProps({ value }) {
+    if (!value) {
+      return { style: { display: 'none' } }
+    }
+  }
+}
+```
+
+## TypeScript Support
+
+Define typed directives:
+
+```typescript
+import type { Directive } from 'vue'
+
+interface TooltipOptions {
+  text: string
+  position?: 'top' | 'bottom' | 'left' | 'right'
+}
+
+const vTooltip: Directive<HTMLElement, TooltipOptions> = {
+  mounted(el, binding) {
+    const { text, position = 'top' } = binding.value
+    // Implementation
+  }
+}
+```
+
+## Best Practices
+
+### 1. Clean Up Side Effects
+
+Always clean up event listeners and DOM modifications:
+
+```javascript
+const vLazy = {
+  mounted(el, binding) {
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        el.src = binding.value
+        observer.disconnect()
+      }
+    })
+    observer.observe(el)
+    el._observer = observer
+  },
+  
+  unmounted(el) {
+    el._observer?.disconnect()
+    delete el._observer
+  }
+}
+```
+
+### 2. Use Consistent Naming
+
+Prefix custom directives with a project-specific prefix:
+
+```javascript
+// Good - clear and namespaced
+app.directive('my-app-focus', { /* ... */ })
+app.directive('my-app-tooltip', { /* ... */ })
+
+// Avoid - might conflict with future built-in directives
+app.directive('focus', { /* ... */ })
+```
+
+### 3. Prefer Composables When Possible
+
+Use composables for logic that doesn't need DOM access:
+
+```javascript
+// Use composable instead
+export function useClickOutside(callback) {
+  const target = ref(null)
+  
+  onMounted(() => {
+    const handler = (e) => {
+      if (target.value && !target.value.contains(e.target)) {
+        callback()
+      }
+    }
+    document.addEventListener('click', handler)
+    onUnmounted(() => document.removeEventListener('click', handler))
+  })
+  
+  return { target }
+}
+```
+
+### 4. Handle Edge Cases
+
+Guard against missing elements or values:
+
+```javascript
+const vSafe = {
+  mounted(el, binding) {
+    if (!el || !binding.value) {
+      console.warn('v-safe: missing element or value')
+      return
+    }
+    // Safe to proceed
+  }
+}
+```
+
+## Validation
+
+Vue validates directive names to prevent conflicts:
+
+```javascript
+import { validateDirectiveName } from 'vue'
+
+// Warns if name conflicts with built-in directives
+validateDirectiveName('if')  // Warning: using built-in directive name
+validateDirectiveName('show') // Warning: using built-in directive name
+```
+
+## Related
+
+- [Composables](/reusability/composables)
+- [Plugins](/reusability/plugins)
+- [Render Functions](/extras/render-function)

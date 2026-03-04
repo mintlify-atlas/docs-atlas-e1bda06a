@@ -1,0 +1,554 @@
+---
+title: Slots
+description: Learn about slot composition patterns and scoped slots in Vue.js components
+---
+
+## Overview
+
+Slots allow parent components to pass template content into child components, enabling flexible content composition.
+
+## Basic Slots
+
+### Defining Slots
+
+```vue
+<!-- ButtonComponent.vue -->
+<template>
+  <button class="btn">
+    <slot></slot>
+  </button>
+</template>
+```
+
+### Using Slots
+
+```vue
+<template>
+  <ButtonComponent>
+    Click me!
+  </ButtonComponent>
+</template>
+```
+
+Rendered output:
+```html
+<button class="btn">
+  Click me!
+</button>
+```
+
+## Fallback Content
+
+Provide default content when no slot content is provided:
+
+```vue
+<template>
+  <button>
+    <slot>Submit</slot> <!-- fallback content -->
+  </button>
+</template>
+```
+
+```vue
+<!-- With content -->
+<ButtonComponent>Save</ButtonComponent>
+<!-- Renders: <button>Save</button> -->
+
+<!-- Without content -->
+<ButtonComponent />
+<!-- Renders: <button>Submit</button> -->
+```
+
+## Named Slots
+
+### Defining Named Slots
+
+```vue
+<!-- Layout.vue -->
+<template>
+  <div class="container">
+    <header>
+      <slot name="header"></slot>
+    </header>
+    <main>
+      <slot></slot> <!-- default slot -->
+    </main>
+    <footer>
+      <slot name="footer"></slot>
+    </footer>
+  </div>
+</template>
+```
+
+### Using Named Slots
+
+```vue
+<template>
+  <Layout>
+    <template #header>
+      <h1>Page Title</h1>
+    </template>
+
+    <p>Main content goes here</p>
+
+    <template #footer>
+      <p>Footer content</p>
+    </template>
+  </Layout>
+</template>
+```
+
+### v-slot Shorthand
+
+```vue
+<!-- Full syntax -->
+<template v-slot:header>
+  <h1>Header</h1>
+</template>
+
+<!-- Shorthand -->
+<template #header>
+  <h1>Header</h1>
+</template>
+```
+
+## Scoped Slots
+
+Scoped slots allow slots to access child component data.
+
+### Defining Scoped Slots
+
+```vue
+<!-- ItemList.vue -->
+<script setup>
+const items = [
+  { id: 1, name: 'Item 1' },
+  { id: 2, name: 'Item 2' }
+]
+</script>
+
+<template>
+  <div v-for="item in items" :key="item.id">
+    <slot :item="item" :index="index"></slot>
+  </div>
+</template>
+```
+
+### Using Scoped Slots
+
+```vue
+<template>
+  <ItemList>
+    <template #default="{ item, index }">
+      <div>{{ index }}: {{ item.name }}</div>
+    </template>
+  </ItemList>
+</template>
+```
+
+### Named Scoped Slots
+
+```vue
+<!-- Table.vue -->
+<template>
+  <table>
+    <thead>
+      <slot name="header" :columns="columns"></slot>
+    </thead>
+    <tbody>
+      <tr v-for="row in rows" :key="row.id">
+        <slot name="row" :row="row"></slot>
+      </tr>
+    </tbody>
+  </table>
+</template>
+```
+
+```vue
+<Table>
+  <template #header="{ columns }">
+    <tr>
+      <th v-for="col in columns" :key="col">{{ col }}</th>
+    </tr>
+  </template>
+  
+  <template #row="{ row }">
+    <td>{{ row.name }}</td>
+    <td>{{ row.value }}</td>
+  </template>
+</Table>
+```
+
+## Slot Types
+
+### Slot Function Type
+
+```ts
+export type Slot<T extends any = any> = (
+  ...args: IfAny<T, any[], [T] | (T extends undefined ? [] : never)>
+) => VNode[]
+```
+
+Source: `runtime-core/src/componentSlots.ts:30-32`
+
+### Slots Interface
+
+```ts
+export type Slots = Readonly<{
+  [name: string]: Slot | undefined
+}>
+```
+
+Source: `runtime-core/src/componentSlots.ts:38`
+
+### SlotsType Helper
+
+```ts
+export type SlotsType<T extends Record<string, any> = Record<string, any>> = {
+  [SlotSymbol]?: T
+}
+```
+
+Source: `runtime-core/src/componentSlots.ts:41-43`
+
+## Type-Safe Slots
+
+### With `<script setup>`
+
+```vue
+<script setup lang="ts">
+import type { SlotsType } from 'vue'
+
+interface Item {
+  id: number
+  name: string
+}
+
+defineSlots<{
+  default(props: { item: Item }): any
+  header(props: { title: string }): any
+  footer(): any
+}>()
+</script>
+```
+
+Source: `runtime-core/src/apiSetupHelpers.ts:234-241`
+
+### Without `<script setup>`
+
+```ts
+import { defineComponent, SlotsType } from 'vue'
+
+interface Item {
+  id: number
+  name: string
+}
+
+export default defineComponent({
+  slots: Object as SlotsType<{
+    default: { item: Item }
+    header: { title: string }
+    footer: {}
+  }>,
+  setup(props, { slots }) {
+    // slots are typed
+    slots.default?.({ item: { id: 1, name: 'Item' } })
+  }
+})
+```
+
+## Accessing Slots
+
+### In `<script setup>`
+
+```vue
+<script setup>
+import { useSlots } from 'vue'
+
+const slots = useSlots()
+
+// Check if slot exists
+if (slots.header) {
+  console.log('Header slot provided')
+}
+
+// Render slot programmatically
+const headerContent = slots.header?.()
+</script>
+```
+
+Source: `runtime-core/src/apiSetupHelpers.ts:393-395`
+
+### In Options API
+
+```js
+export default {
+  mounted() {
+    console.log(this.$slots.default())
+  }
+}
+```
+
+## Dynamic Slot Names
+
+```vue
+<script setup>
+const slotName = ref('header')
+</script>
+
+<template>
+  <BaseLayout>
+    <template #[slotName]>
+      <h1>Dynamic slot content</h1>
+    </template>
+  </BaseLayout>
+</template>
+```
+
+## Conditional Slots
+
+```vue
+<!-- Child.vue -->
+<script setup>
+import { useSlots } from 'vue'
+
+const slots = useSlots()
+const hasHeader = computed(() => !!slots.header)
+</script>
+
+<template>
+  <div>
+    <div v-if="hasHeader" class="header">
+      <slot name="header"></slot>
+    </div>
+    <div class="content">
+      <slot></slot>
+    </div>
+  </div>
+</template>
+```
+
+## Slot Normalization
+
+Internal slot normalization:
+
+```ts
+const normalizeSlot = (
+  key: string,
+  rawSlot: Function,
+  ctx: ComponentInternalInstance | null | undefined,
+): Slot => {
+  if ((rawSlot as any)._n) {
+    // already normalized
+    return rawSlot as Slot
+  }
+  const normalized = withCtx((...args: any[]) => {
+    return normalizeSlotValue(rawSlot(...args))
+  }, ctx) as Slot
+  return normalized
+}
+```
+
+Source: `runtime-core/src/componentSlots.ts:92-118`
+
+## renderless Components
+
+Components that only provide logic via scoped slots:
+
+```vue
+<!-- Mouse.vue -->
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue'
+
+const x = ref(0)
+const y = ref(0)
+
+function update(event) {
+  x.value = event.pageX
+  y.value = event.pageY
+}
+
+onMounted(() => window.addEventListener('mousemove', update))
+onUnmounted(() => window.removeEventListener('mousemove', update))
+</script>
+
+<template>
+  <slot :x="x" :y="y"></slot>
+</template>
+```
+
+```vue
+<Mouse v-slot="{ x, y }">
+  <p>Mouse position: {{ x }}, {{ y }}</p>
+</Mouse>
+```
+
+## Slot Performance
+
+### Stable Slots
+
+Slots marked as stable skip forced updates:
+
+```ts
+export type RawSlots = {
+  [name: string]: unknown
+  $stable?: boolean
+}
+```
+
+Source: `runtime-core/src/componentSlots.ts:63-66`
+
+### Compiled Slots
+
+Compiler-generated slots are optimized:
+
+```ts
+export type RawSlots = {
+  // indicates compiler generated slots
+  _?: SlotFlags
+}
+```
+
+Source: `runtime-core/src/componentSlots.ts:74-81`
+
+## Advanced Patterns
+
+### Slot Forwarding
+
+Forward all slots to a child component:
+
+```vue
+<script setup>
+import { useSlots } from 'vue'
+import ChildComponent from './Child.vue'
+
+const slots = useSlots()
+</script>
+
+<template>
+  <div class="wrapper">
+    <ChildComponent>
+      <template v-for="(_, name) in slots" #[name]="slotProps">
+        <slot :name="name" v-bind="slotProps"></slot>
+      </template>
+    </ChildComponent>
+  </div>
+</template>
+```
+
+### Slot Composition
+
+```vue
+<!-- Accordion.vue -->
+<template>
+  <div class="accordion">
+    <slot name="item" v-for="item in items" :item="item">
+      <!-- Nested slots -->
+      <slot name="item-header" :item="item"></slot>
+      <slot name="item-content" :item="item"></slot>
+    </slot>
+  </div>
+</template>
+```
+
+### Higher-Order Slots
+
+```vue
+<script setup>
+import { useSlots, h } from 'vue'
+
+const slots = useSlots()
+
+function wrappedSlot(slotProps) {
+  const content = slots.default?.(slotProps)
+  return h('div', { class: 'wrapped' }, content)
+}
+</script>
+```
+
+## Best Practices
+
+1. **Use named slots** for multiple injection points
+2. **Provide fallback content** for better defaults
+3. **Type slots** with `defineSlots()` in TypeScript
+4. **Use scoped slots** to share component state
+5. **Check slot existence** before conditional rendering
+6. **Keep slot APIs stable** to avoid unnecessary re-renders
+7. **Document slot props** in component comments
+8. **Use v-slot shorthand** (#) for cleaner templates
+
+## Common Patterns
+
+### List with Custom Items
+
+```vue
+<script setup>
+const items = ref([...])
+</script>
+
+<template>
+  <ul>
+    <li v-for="(item, index) in items" :key="item.id">
+      <slot :item="item" :index="index">
+        {{ item.name }}
+      </slot>
+    </li>
+  </ul>
+</template>
+```
+
+### Modal with Multiple Sections
+
+```vue
+<template>
+  <div class="modal">
+    <div class="modal-header">
+      <slot name="header"></slot>
+      <button @click="close">×</button>
+    </div>
+    <div class="modal-body">
+      <slot></slot>
+    </div>
+    <div class="modal-footer">
+      <slot name="footer">
+        <button @click="close">Close</button>
+      </slot>
+    </div>
+  </div>
+</template>
+```
+
+### Data Provider
+
+```vue
+<script setup>
+import { ref, onMounted } from 'vue'
+
+const data = ref(null)
+const loading = ref(false)
+const error = ref(null)
+
+const props = defineProps(['url'])
+
+onMounted(async () => {
+  loading.value = true
+  try {
+    data.value = await fetch(props.url).then(r => r.json())
+  } catch (e) {
+    error.value = e
+  } finally {
+    loading.value = false
+  }
+})
+</script>
+
+<template>
+  <slot :data="data" :loading="loading" :error="error"></slot>
+</template>
+```
+
+## Related APIs
+
+- [Props](/components/props) - Learn about component props
+- [Events](/components/events) - Learn about component events
+- [Render Functions](/guide/render-functions) - Learn about programmatic rendering

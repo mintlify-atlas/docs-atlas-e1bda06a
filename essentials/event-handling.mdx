@@ -1,0 +1,624 @@
+---
+title: Event Handling
+description: Learn how to handle user events in Vue using the v-on directive and event modifiers.
+---
+
+Vue provides the `v-on` directive (shorthand `@`) to listen to DOM events and execute JavaScript when triggered.
+
+## Basic Event Handling
+
+Listen to events using `v-on` or its shorthand `@`:
+
+```vue
+<template>
+  <div>
+    <!-- Full syntax -->
+    <button v-on:click="count++">Increment</button>
+    
+    <!-- Shorthand -->
+    <button @click="count++">Increment</button>
+    
+    <p>Count: {{ count }}</p>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const count = ref(0)
+</script>
+```
+
+## Method Handlers
+
+For more complex logic, call a method:
+
+```vue
+<template>
+  <div>
+    <button @click="increment">Increment</button>
+    <button @click="decrement">Decrement</button>
+    <p>Count: {{ count }}</p>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const count = ref(0)
+
+function increment() {
+  count.value++
+}
+
+function decrement() {
+  count.value--
+}
+</script>
+```
+
+## Inline Handlers with Arguments
+
+Pass arguments to event handlers:
+
+```vue
+<template>
+  <div>
+    <button @click="greet('Hello')">Say Hello</button>
+    <button @click="greet('Goodbye')">Say Goodbye</button>
+  </div>
+</template>
+
+<script setup>
+function greet(message) {
+  alert(message)
+}
+</script>
+```
+
+## Accessing Event Object
+
+Access the native DOM event:
+
+<CodeGroup>
+```vue Direct Event Access
+<template>
+  <!-- Method name - event passed automatically -->
+  <button @click="handleClick">Click me</button>
+</template>
+
+<script setup>
+function handleClick(event) {
+  console.log(event.target)
+  console.log(event.type) // 'click'
+}
+</script>
+```
+
+```vue Using $event
+<template>
+  <!-- Inline with $event variable -->
+  <button @click="handleClick('Hello', $event)">Click</button>
+</template>
+
+<script setup>
+function handleClick(message, event) {
+  console.log(message) // 'Hello'
+  console.log(event.target)
+}
+</script>
+```
+
+```vue Arrow Function
+<template>
+  <!-- Arrow function -->
+  <button @click="(event) => handleClick('Hello', event)">Click</button>
+</template>
+
+<script setup>
+function handleClick(message, event) {
+  console.log(message, event)
+}
+</script>
+```
+</CodeGroup>
+
+## Event Modifiers
+
+From `packages/runtime-dom/src/directives/vOn.ts:30-47`, Vue provides event modifiers to handle common event tasks:
+
+### Stop Propagation
+
+```vue
+<template>
+  <!-- Stop event propagation -->
+  <div @click="parentHandler">
+    <button @click.stop="childHandler">Click me</button>
+  </div>
+</template>
+```
+
+The `.stop` modifier calls `event.stopPropagation()`.
+
+### Prevent Default
+
+```vue
+<template>
+  <!-- Prevent default behavior -->
+  <form @submit.prevent="onSubmit">
+    <button type="submit">Submit</button>
+  </form>
+  
+  <!-- Modifier only -->
+  <form @submit.prevent>
+    <!-- Form won't submit -->
+  </form>
+</template>
+```
+
+The `.prevent` modifier calls `event.preventDefault()`.
+
+### Modifier Chaining
+
+```vue
+<template>
+  <!-- Modifiers can be chained -->
+  <a @click.stop.prevent="doThat">Link</a>
+</template>
+```
+
+<Warning>
+  Order matters when chaining modifiers. For example, `@click.prevent.self` will prevent click's default action on the element itself and its children, while `@click.self.prevent` will only prevent click's default action on the element itself.
+</Warning>
+
+### Self Modifier
+
+```vue
+<template>
+  <!-- Only trigger if event.target is the element itself -->
+  <div @click.self="handleClick">
+    <button>Won't trigger parent handler</button>
+  </div>
+</template>
+```
+
+### Capture Mode
+
+```vue
+<template>
+  <!-- Use capture mode when adding event listener -->
+  <div @click.capture="doThis">
+    <!-- Inner element clicks handled by outer handler first -->
+  </div>
+</template>
+```
+
+### Once Modifier
+
+```vue
+<template>
+  <!-- Event will be triggered at most once -->
+  <button @click.once="handleClick">Click once</button>
+</template>
+```
+
+### Passive Modifier
+
+```vue
+<template>
+  <!-- Improves scrolling performance on mobile -->
+  <div @scroll.passive="onScroll">
+    <!-- ... -->
+  </div>
+</template>
+```
+
+<Note>
+  Don't use `.passive` and `.prevent` together. `.passive` indicates to the browser that you won't prevent the event's default behavior, while `.prevent` does exactly that.
+</Note>
+
+## Available Event Modifiers
+
+From `packages/runtime-dom/src/directives/vOn.ts:30-47`, the complete list of modifiers:
+
+<Steps>
+  <Step title=".stop">
+    Calls `event.stopPropagation()` - stops event propagation
+  </Step>
+  
+  <Step title=".prevent">
+    Calls `event.preventDefault()` - prevents default behavior
+  </Step>
+  
+  <Step title=".self">
+    Only triggers if `event.target` is the element itself
+  </Step>
+  
+  <Step title=".capture">
+    Uses capture mode for event listener
+  </Step>
+  
+  <Step title=".once">
+    Triggers the event listener at most once
+  </Step>
+  
+  <Step title=".passive">
+    Adds listener as passive for better scroll performance
+  </Step>
+</Steps>
+
+## Key Modifiers
+
+Listen for specific keys:
+
+```vue
+<template>
+  <div>
+    <!-- Only call when Enter is pressed -->
+    <input @keyup.enter="submit" />
+    
+    <!-- Only call when PageDown is pressed -->
+    <input @keyup.page-down="onPageDown" />
+  </div>
+</template>
+```
+
+### Key Aliases
+
+From `packages/runtime-dom/src/directives/vOn.ts:75-86`, Vue provides aliases for commonly used keys:
+
+```vue
+<template>
+  <input @keyup.enter="submit" />
+  <input @keyup.tab="handleTab" />
+  <input @keyup.delete="handleDelete" />
+  <input @keyup.esc="handleEscape" />
+  <input @keyup.space="handleSpace" />
+  <input @keyup.up="handleUp" />
+  <input @keyup.down="handleDown" />
+  <input @keyup.left="handleLeft" />
+  <input @keyup.right="handleRight" />
+</template>
+```
+
+The key mappings from source code:
+
+```typescript
+const keyNames: Record<string, string> = {
+  esc: 'escape',
+  space: ' ',
+  up: 'arrow-up',
+  left: 'arrow-left',
+  right: 'arrow-right',
+  down: 'arrow-down',
+  delete: 'backspace'
+}
+```
+
+### Any Valid Key
+
+Use kebab-case for any key:
+
+```vue
+<template>
+  <input @keyup.page-down="onPageDown" />
+</template>
+```
+
+## System Modifier Keys
+
+From `packages/runtime-dom/src/directives/vOn.ts:11`, listen for modifier keys:
+
+```vue
+<template>
+  <div>
+    <!-- Ctrl + Click -->
+    <button @click.ctrl="onClick">Ctrl+Click</button>
+    
+    <!-- Alt + Enter -->
+    <input @keyup.alt.enter="clear" />
+    
+    <!-- Shift + Click -->
+    <div @click.shift="handleShiftClick">Shift+Click</div>
+    
+    <!-- Cmd on Mac, Ctrl on Windows/Linux -->
+    <button @click.meta="handleMetaClick">Cmd/Ctrl+Click</button>
+  </div>
+</template>
+```
+
+### Exact Modifier
+
+Require exact combination of modifiers:
+
+```vue
+<template>
+  <div>
+    <!-- Triggers even if Alt or Shift is also pressed -->
+    <button @click.ctrl="onClick">Click</button>
+    
+    <!-- Only triggers when Ctrl and no other keys are pressed -->
+    <button @click.ctrl.exact="onCtrlClick">Ctrl only</button>
+    
+    <!-- Only triggers when no system modifiers are pressed -->
+    <button @click.exact="onClick">Click only</button>
+  </div>
+</template>
+```
+
+## Mouse Button Modifiers
+
+Restrict handler to specific mouse buttons:
+
+```vue
+<template>
+  <div>
+    <!-- Left click only -->
+    <button @click.left="handleLeftClick">Left</button>
+    
+    <!-- Right click only -->
+    <button @click.right="handleRightClick">Right</button>
+    
+    <!-- Middle click only -->
+    <button @click.middle="handleMiddleClick">Middle</button>
+  </div>
+</template>
+```
+
+From the source at `packages/runtime-dom/src/directives/vOn.ts:42-44`:
+
+```typescript
+const modifierGuards = {
+  left: (e: Event) => 'button' in e && (e as MouseEvent).button !== 0,
+  middle: (e: Event) => 'button' in e && (e as MouseEvent).button !== 1,
+  right: (e: Event) => 'button' in e && (e as MouseEvent).button !== 2,
+}
+```
+
+## withModifiers Helper
+
+Programmatically add modifiers from `packages/runtime-dom/src/directives/vOn.ts:52-71`:
+
+```typescript
+import { withModifiers } from 'vue'
+
+const handler = withModifiers(
+  (event) => {
+    // Handler code
+  },
+  ['stop', 'prevent']
+)
+```
+
+## withKeys Helper
+
+Programmatically add key modifiers from `packages/runtime-dom/src/directives/vOn.ts:91-162`:
+
+```typescript
+import { withKeys } from 'vue'
+
+const handler = withKeys(
+  (event) => {
+    // Handler code
+  },
+  ['enter', 'space']
+)
+```
+
+## Multiple Event Handlers
+
+Bind multiple handlers to the same event:
+
+```vue
+<template>
+  <button @click="handler1(), handler2()">Click</button>
+</template>
+
+<script setup>
+function handler1() {
+  console.log('Handler 1')
+}
+
+function handler2() {
+  console.log('Handler 2')
+}
+</script>
+```
+
+## Dynamic Events
+
+Bind events dynamically:
+
+```vue
+<template>
+  <div>
+    <!-- Dynamic event name -->
+    <button @[eventName]="handleEvent">Click or Hover</button>
+    
+    <select v-model="eventName">
+      <option value="click">Click</option>
+      <option value="mouseenter">Hover</option>
+    </select>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const eventName = ref('click')
+
+function handleEvent() {
+  console.log(`${eventName.value} event triggered`)
+}
+</script>
+```
+
+## Common Event Types
+
+<CodeGroup>
+```vue Mouse Events
+<template>
+  <div
+    @click="onClick"
+    @dblclick="onDoubleClick"
+    @mousedown="onMouseDown"
+    @mouseup="onMouseUp"
+    @mousemove="onMouseMove"
+    @mouseenter="onMouseEnter"
+    @mouseleave="onMouseLeave"
+    @contextmenu.prevent="onContextMenu"
+  >
+    Interact with me
+  </div>
+</template>
+```
+
+```vue Keyboard Events
+<template>
+  <input
+    @keydown="onKeyDown"
+    @keyup="onKeyUp"
+    @keypress="onKeyPress"
+  />
+</template>
+```
+
+```vue Form Events
+<template>
+  <form @submit.prevent="onSubmit">
+    <input
+      @input="onInput"
+      @change="onChange"
+      @focus="onFocus"
+      @blur="onBlur"
+    />
+  </form>
+</template>
+```
+
+```vue Other Events
+<template>
+  <div
+    @scroll="onScroll"
+    @resize="onResize"
+    @drag="onDrag"
+    @drop.prevent="onDrop"
+  >
+    Content
+  </div>
+</template>
+```
+</CodeGroup>
+
+## Event Handler Patterns
+
+### Debouncing
+
+```vue
+<template>
+  <input @input="debouncedSearch" placeholder="Search..." />
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const searchQuery = ref('')
+let debounceTimer = null
+
+function debouncedSearch(event) {
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    searchQuery.value = event.target.value
+    performSearch(searchQuery.value)
+  }, 300)
+}
+
+function performSearch(query) {
+  console.log('Searching for:', query)
+}
+</script>
+```
+
+### Throttling
+
+```vue
+<script setup>
+let lastCall = 0
+const throttleDelay = 100
+
+function throttledHandler(event) {
+  const now = Date.now()
+  if (now - lastCall < throttleDelay) return
+  
+  lastCall = now
+  // Handle event
+  console.log('Throttled handler called')
+}
+</script>
+```
+
+### Conditional Event Handling
+
+```vue
+<template>
+  <button @click="handleClick" :disabled="isLoading">
+    {{ isLoading ? 'Loading...' : 'Submit' }}
+  </button>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const isLoading = ref(false)
+
+function handleClick() {
+  if (isLoading.value) return
+  
+  isLoading.value = true
+  // Perform async operation
+  setTimeout(() => {
+    isLoading.value = false
+  }, 2000)
+}
+</script>
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use method handlers for complex logic">
+    Keep template expressions simple by using methods for anything beyond basic operations.
+  </Step>
+
+  <Step title="Prevent default for form submissions">
+    Always use `.prevent` on form submit events to avoid page reloads.
+    
+    ```vue
+    <form @submit.prevent="onSubmit">
+    ```
+  </Step>
+
+  <Step title="Use appropriate modifiers">
+    Take advantage of event modifiers to write cleaner, more declarative code.
+  </Step>
+
+  <Step title="Consider performance">
+    For high-frequency events (scroll, mousemove), consider debouncing or throttling.
+  </Step>
+</Steps>
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Template Syntax" icon="code" href="/essentials/template-syntax">
+    Learn about directives and expressions
+  </Card>
+  
+  <Card title="Forms" icon="file-lines" href="/essentials/forms">
+    Handle form input with v-model
+  </Card>
+  
+  <Card title="Reactivity Fundamentals" icon="bolt" href="/essentials/reactivity-fundamentals">
+    Understand reactive state updates
+  </Card>
+</CardGroup>

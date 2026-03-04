@@ -1,0 +1,283 @@
+---
+title: Options - Composition
+---
+
+## provide
+
+<ParamField path="provide" type="Object | () => Object">
+  Provide values that can be injected by descendant components.
+
+  `provide` and `inject` are primarily used to allow ancestor components to serve as dependency injectors for all its descendants, regardless of how deep the component hierarchy is, as long as they are in the same parent chain.
+
+  The `provide` option should be either:
+  - An object
+  - A function that returns an object
+
+  The object's properties are available for injection by descendant components using their keys. You can use Symbols as keys to avoid potential collisions.
+
+  When using the function syntax, `this` refers to the component instance, allowing you to provide values that depend on component state.
+
+  **Example:**
+  ```js
+  export default {
+    data() {
+      return {
+        message: 'hello'
+      }
+    },
+    provide() {
+      // use function syntax to access `this`
+      return {
+        message: this.message
+      }
+    }
+  }
+  ```
+
+  **Example with Symbol keys:**
+  ```js
+  const ThemeSymbol = Symbol()
+
+  export default {
+    provide() {
+      return {
+        [ThemeSymbol]: 'dark'
+      }
+    }
+  }
+  ```
+
+  **Note on Reactivity:**
+  
+  When providing reactive values, it's recommended to keep reactive changes inside the provider component whenever possible. This ensures that the provided state and its possible mutations are co-located in the same component, making it easier to maintain.
+
+  To provide reactive state, use computed properties or reactive objects:
+
+  ```js
+  import { computed } from 'vue'
+
+  export default {
+    data() {
+      return {
+        message: 'hello'
+      }
+    },
+    provide() {
+      return {
+        // explicitly provide a computed property
+        message: computed(() => this.message)
+      }
+    }
+  }
+  ```
+</ParamField>
+
+## inject
+
+<ParamField path="inject" type="Array<string> | { [key: string]: string | Symbol | { from?: string | Symbol, default?: any } }">
+  Declare properties to inject into the current component by locating them from ancestor providers.
+
+  The `inject` option should be either:
+  - An array of strings
+  - An object where the keys are the local binding name, and the value is either:
+    - The key (string or Symbol) to search for in available injections
+    - An object where:
+      - The `from` property is the key (string or Symbol) to search for in available injections
+      - The `default` property is used as fallback value. Similar to props default values, a factory function is needed for object types to avoid value sharing between multiple component instances.
+
+  An injected property will be `undefined` if neither a matching property nor a default value was provided.
+
+  Note that injected bindings are NOT reactive. This is intentional. However, if the injected value is a reactive object, properties on that object do remain reactive. If you need to provide reactivity, provide a ref or computed property instead.
+
+  **Example:**
+  ```js
+  // Array syntax
+  export default {
+    inject: ['message'],
+    created() {
+      console.log(this.message)
+    }
+  }
+  ```
+
+  **Example with local property name:**
+  ```js
+  // Object syntax
+  export default {
+    inject: {
+      // inject 'message' and assign to local 'localMessage' property
+      localMessage: {
+        from: 'message'
+      }
+    }
+  }
+  ```
+
+  **Example with default values:**
+  ```js
+  export default {
+    inject: {
+      message: {
+        from: 'message',
+        default: 'default message'
+      },
+      user: {
+        from: 'user',
+        // use a factory function for non-primitive values
+        default: () => ({ name: 'Guest' })
+      }
+    }
+  }
+  ```
+
+  **Example with Symbol keys:**
+  ```js
+  const ThemeSymbol = Symbol()
+
+  export default {
+    inject: {
+      theme: {
+        from: ThemeSymbol,
+        default: 'light'
+      }
+    }
+  }
+  ```
+</ParamField>
+
+## mixins
+
+<ParamField path="mixins" type="Array<Object>">
+  An array of option objects to be mixed into the current component.
+
+  Mixins are a flexible way to distribute reusable functionalities for Vue components. A mixin object can contain any component options. When a component uses a mixin, all options in the mixin will be "mixed" into the component's own options.
+
+  **Option Merging:**
+
+  When a mixin and the component itself contain overlapping options, they will be "merged" using appropriate strategies:
+
+  - Data objects undergo a recursive merge, with the component's data taking priority in case of conflicts.
+  - Hook functions with the same name are merged into an array so that all of them will be called. Mixin hooks will be called before the component's own hooks.
+  - Options that expect object values, such as `methods`, `components` and `directives`, will be merged into the same object. When there are conflicting keys, the component's options take priority.
+
+  **Example:**
+  ```js
+  const myMixin = {
+    created() {
+      console.log('mixin hook called')
+    },
+    methods: {
+      hello() {
+        console.log('hello from mixin!')
+      }
+    }
+  }
+
+  export default {
+    mixins: [myMixin],
+    created() {
+      console.log('component hook called')
+    },
+    methods: {
+      hello() {
+        console.log('hello from component!')
+      }
+    }
+  }
+
+  // Output when component is created:
+  // => "mixin hook called"
+  // => "component hook called"
+
+  // this.hello() will log:
+  // => "hello from component!"
+  ```
+
+  **Reusability Example:**
+  ```js
+  // Define a mixin for handling loading state
+  const loadingMixin = {
+    data() {
+      return {
+        isLoading: false
+      }
+    },
+    methods: {
+      startLoading() {
+        this.isLoading = true
+      },
+      stopLoading() {
+        this.isLoading = false
+      }
+    }
+  }
+
+  // Use the mixin in multiple components
+  export default {
+    mixins: [loadingMixin],
+    async created() {
+      this.startLoading()
+      await this.fetchData()
+      this.stopLoading()
+    }
+  }
+  ```
+
+  **Note:** In Vue 3, [Composition API](/reusability/composables) is now the preferred approach for code reuse. Mixins remain supported primarily for backwards compatibility and migrating from Vue 2. For new code, consider using composables instead.
+</ParamField>
+
+## extends
+
+<ParamField path="extends" type="Object">
+  A "base class" component to extend from.
+
+  Allows one component to extend another, inheriting its component options.
+
+  From an implementation perspective, `extends` is almost identical to `mixins`. The component specified by `extends` will be treated as though it were the first mixin.
+
+  However, `extends` and `mixins` express different intents. The `mixins` option is primarily used to compose chunks of functionality, whereas `extends` is primarily concerned with inheritance.
+
+  As with `mixins`, any options (except for `setup()`) will be merged using the relevant merge strategy.
+
+  **Example:**
+  ```js
+  const BaseComponent = {
+    data() {
+      return {
+        baseMessage: 'Hello from base'
+      }
+    },
+    methods: {
+      greet() {
+        console.log(this.baseMessage)
+      }
+    },
+    created() {
+      console.log('Base component created')
+    }
+  }
+
+  export default {
+    extends: BaseComponent,
+    data() {
+      return {
+        childMessage: 'Hello from child'
+      }
+    },
+    created() {
+      console.log('Child component created')
+      // Both this.baseMessage and this.childMessage are available
+      console.log(this.baseMessage)
+      console.log(this.childMessage)
+    }
+  }
+
+  // Output when component is created:
+  // => "Base component created"
+  // => "Child component created"
+  // => "Hello from base"
+  // => "Hello from child"
+  ```
+
+  **Note:** In Vue 3, [Composition API](/reusability/composables) is now the preferred approach for code reuse and component composition. For new code, consider using composables instead.
+</ParamField>

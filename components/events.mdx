@@ -1,0 +1,504 @@
+---
+title: Component Events
+description: Learn about emitting and listening to custom events in Vue.js components
+---
+
+## Overview
+
+Components can emit custom events to communicate with their parent. This enables child-to-parent communication in Vue's unidirectional data flow.
+
+## Emitting Events
+
+### With `<script setup>`
+
+#### Array Syntax
+
+```vue
+<script setup>
+const emit = defineEmits(['change', 'update'])
+
+emit('change')
+emit('update', 1)
+</script>
+```
+
+Source: `runtime-core/src/apiSetupHelpers.ts:135-137`
+
+#### Object Syntax
+
+```vue
+<script setup>
+const emit = defineEmits({
+  change: null,
+  update: (value: number) => {
+    // Validation logic
+    return value >= 0
+  }
+})
+
+emit('change')
+emit('update', 1)
+</script>
+```
+
+Source: `runtime-core/src/apiSetupHelpers.ts:138-140`
+
+### Without `<script setup>`
+
+```js
+export default {
+  emits: ['change', 'update'],
+  setup(props, { emit }) {
+    emit('change')
+    emit('update', 1)
+  }
+}
+```
+
+## Type-Based Emits Declaration
+
+With TypeScript, declare emits using pure types:
+
+```vue
+<script setup lang="ts">
+// Record syntax
+const emit = defineEmits<{
+  change: []  // no arguments
+  update: [value: number]  // named tuple syntax
+  delete: [id: string, confirmed: boolean]
+}>()
+
+emit('change')
+emit('update', 1)
+emit('delete', 'id-123', true)
+</script>
+```
+
+Source: `runtime-core/src/apiSetupHelpers.ts:119-127`
+
+### Function Syntax
+
+```vue
+<script setup lang="ts">
+const emit = defineEmits<{
+  (e: 'change'): void
+  (e: 'update', value: number): void
+}>()
+</script>
+```
+
+## Listening to Events
+
+### In Templates
+
+Use `v-on` or `@` shorthand:
+
+```vue
+<template>
+  <MyComponent 
+    @change="handleChange"
+    @update="handleUpdate"
+  />
+</template>
+
+<script setup>
+function handleChange() {
+  console.log('changed')
+}
+
+function handleUpdate(value) {
+  console.log('updated:', value)
+}
+</script>
+```
+
+### Inline Handlers
+
+```vue
+<template>
+  <MyComponent 
+    @change="count++"
+    @update="(value) => handleUpdate(value)"
+  />
+</template>
+```
+
+## Event Validation
+
+### Object Emits Options
+
+```ts
+export type ObjectEmitsOptions = Record<
+  string,
+  ((...args: any[]) => any) | null
+>
+```
+
+Source: `runtime-core/src/componentEmits.ts:36-39`
+
+### Validator Functions
+
+```vue
+<script setup>
+const emit = defineEmits({
+  // No validation
+  change: null,
+  
+  // Validation function
+  update: (value: number) => {
+    if (value < 0) {
+      console.warn('update event payload must be non-negative')
+      return false
+    }
+    return true
+  },
+  
+  // Complex validation
+  submit: (payload: { name: string; email: string }) => {
+    if (!payload.name || !payload.email) {
+      console.warn('submit requires name and email')
+      return false
+    }
+    return true
+  }
+})
+</script>
+```
+
+Source: `runtime-core/src/componentEmits.ts:140-148`
+
+## Event Naming
+
+### camelCase vs kebab-case
+
+Emit events using camelCase in JavaScript:
+
+```js
+emit('myEvent')
+```
+
+Listen using kebab-case in templates:
+
+```vue
+<MyComponent @my-event="handler" />
+```
+
+Vue automatically converts between conventions.
+
+### Event Name Convention
+
+Use descriptive, action-oriented names:
+
+```js
+// ✅ Good
+emit('close')
+emit('submit')
+emit('item-selected')
+
+// ❌ Avoid
+emit('click')  // too generic
+emit('data')   // unclear action
+```
+
+## EmitFn Type
+
+The `emit` function is typed based on declared events:
+
+```ts
+export type EmitFn<
+  Options = ObjectEmitsOptions,
+  Event extends keyof Options = keyof Options,
+> =
+  Options extends Array<infer V>
+    ? (event: V, ...args: any[]) => void
+    : {} extends Options
+      ? (event: string, ...args: any[]) => void
+      : UnionToIntersection<
+          {
+            [key in Event]: Options[key] extends (...args: infer Args) => any
+              ? (event: key, ...args: Args) => void
+              : Options[key] extends any[]
+                ? (event: key, ...args: Options[key]) => void
+                : (event: key, ...args: any[]) => void
+          }[Event]
+        >
+```
+
+Source: `runtime-core/src/componentEmits.ts:93-109`
+
+## EmitsToProps Type
+
+Emits are automatically converted to props for type checking:
+
+```ts
+export type EmitsToProps<T extends EmitsOptions> =
+  T extends string[]
+    ? {
+        [K in `on${Capitalize<T[number]>}`]?: (...args: any[]) => any
+      }
+    : T extends ObjectEmitsOptions
+      ? {
+          [K in string & keyof T as `on${Capitalize<K>}`]?: (
+            ...args: T[K] extends (...args: infer P) => any
+              ? P
+              : T[K] extends null
+                ? any[]
+                : never
+          ) => any
+        }
+      : {}
+```
+
+Source: `runtime-core/src/componentEmits.ts:43-58`
+
+## Event Bubbling
+
+Vue component events do not bubble by default:
+
+```vue
+<!-- Parent.vue -->
+<div @custom-event="handler">
+  <!-- This won't trigger handler -->
+  <Child />
+</div>
+```
+
+To forward events:
+
+```vue
+<!-- Parent.vue -->
+<Child @custom-event="$emit('custom-event')" />
+```
+
+Or use `v-on` object syntax:
+
+```vue
+<Child v-on="$attrs" />
+```
+
+## v-model Events
+
+Components can use `v-model` by emitting `update:modelValue`:
+
+```vue
+<!-- Child.vue -->
+<script setup>
+const props = defineProps(['modelValue'])
+const emit = defineEmits(['update:modelValue'])
+
+function updateValue(value) {
+  emit('update:modelValue', value)
+}
+</script>
+
+<template>
+  <input 
+    :value="modelValue"
+    @input="updateValue($event.target.value)"
+  />
+</template>
+```
+
+```vue
+<!-- Parent.vue -->
+<template>
+  <Child v-model="text" />
+</template>
+```
+
+### Multiple v-models
+
+```vue
+<!-- Child.vue -->
+<script setup>
+defineEmits(['update:title', 'update:content'])
+</script>
+
+<!-- Parent.vue -->
+<template>
+  <Child 
+    v-model:title="title"
+    v-model:content="content"
+  />
+</template>
+```
+
+## Event Implementation
+
+The internal `emit` function:
+
+```ts
+export function emit(
+  instance: ComponentInternalInstance,
+  event: string,
+  ...rawArgs: any[]
+): ComponentPublicInstance | null | undefined {
+  if (instance.isUnmounted) return
+  const props = instance.vnode.props || EMPTY_OBJ
+  
+  // Emit validation in development
+  if (__DEV__) {
+    const { emitsOptions } = instance
+    if (emitsOptions) {
+      if (!(event in emitsOptions)) {
+        warn(
+          `Component emitted event "${event}" but it is neither declared in ` +
+          `the emits option nor as an "on${capitalize(camelize(event))}" prop.`
+        )
+      } else {
+        const validator = emitsOptions[event]
+        if (isFunction(validator)) {
+          const isValid = validator(...rawArgs)
+          if (!isValid) {
+            warn(
+              `Invalid event arguments: event validation failed for event "${event}".`
+            )
+          }
+        }
+      }
+    }
+  }
+  
+  // ... handler invocation logic
+}
+```
+
+Source: `runtime-core/src/componentEmits.ts:111-150`
+
+## Advanced Patterns
+
+### Typed Event Payloads
+
+```ts
+interface UpdateEvent {
+  id: string
+  value: number
+  timestamp: Date
+}
+
+const emit = defineEmits<{
+  update: [event: UpdateEvent]
+}>()
+
+emit('update', {
+  id: 'item-1',
+  value: 42,
+  timestamp: new Date()
+})
+```
+
+### Event Composition
+
+```vue
+<script setup>
+const emit = defineEmits(['save', 'cancel'])
+
+function handleSave(data) {
+  // Pre-processing
+  const processedData = transform(data)
+  emit('save', processedData)
+}
+
+function handleCancel() {
+  // Cleanup logic
+  cleanup()
+  emit('cancel')
+}
+</script>
+```
+
+### Conditional Events
+
+```vue
+<script setup>
+const emit = defineEmits(['success', 'error'])
+
+async function submit(data) {
+  try {
+    const result = await api.submit(data)
+    emit('success', result)
+  } catch (error) {
+    emit('error', error)
+  }
+}
+</script>
+```
+
+## Best Practices
+
+1. **Always declare emits** explicitly for better documentation and validation
+2. **Use type-based declarations** with TypeScript for compile-time safety
+3. **Validate event payloads** in development using validator functions
+4. **Use descriptive names** that clearly indicate the action
+5. **Keep payloads simple** - pass only necessary data
+6. **Document events** in component JSDoc comments
+7. **Avoid side effects** in emit calls - keep them pure
+8. **Use v-model pattern** for two-way binding scenarios
+
+## Common Patterns
+
+### Confirmation Dialog
+
+```vue
+<script setup>
+const emit = defineEmits<{
+  confirm: []
+  cancel: []
+}>()
+</script>
+
+<template>
+  <div class="dialog">
+    <button @click="emit('confirm')">Confirm</button>
+    <button @click="emit('cancel')">Cancel</button>
+  </div>
+</template>
+```
+
+### Form Events
+
+```vue
+<script setup>
+interface FormData {
+  name: string
+  email: string
+}
+
+const emit = defineEmits<{
+  submit: [data: FormData]
+  reset: []
+  error: [message: string]
+}>()
+</script>
+```
+
+### Async Operations
+
+```vue
+<script setup>
+const emit = defineEmits<{
+  loading: [isLoading: boolean]
+  success: [data: any]
+  error: [error: Error]
+}>()
+
+async function load() {
+  emit('loading', true)
+  try {
+    const data = await fetchData()
+    emit('success', data)
+  } catch (error) {
+    emit('error', error)
+  } finally {
+    emit('loading', false)
+  }
+}
+</script>
+```
+
+## Related APIs
+
+- [Props](/components/props) - Learn about receiving data from parent
+- [v-model](/components/v-model) - Learn about two-way binding
+- [defineModel](/components/define-model) - Learn about the model helper
+- [Provide/Inject](/components/provide-inject) - Learn about dependency injection

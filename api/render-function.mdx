@@ -1,0 +1,421 @@
+---
+title: Render Function API
+---
+
+API for creating Virtual DOM nodes using render functions. The h() function and related APIs allow you to manually write render functions instead of using templates.
+
+## h()
+
+Creates a Virtual Node (VNode). A more user-friendly version of `createVNode()` that allows omitting props when possible.
+
+**Type Signature:**
+```ts
+// Element
+function h(
+  type: string,
+  props?: RawProps | null,
+  children?: RawChildren | RawSlots
+): VNode
+
+// Component
+function h(
+  type: Component,
+  props?: (RawProps & ComponentProps) | null,
+  children?: RawChildren | RawSlots
+): VNode
+
+// Fragment, Teleport, Suspense
+function h(
+  type: typeof Fragment | typeof Teleport | typeof Suspense,
+  props?: RawProps | null,
+  children?: RawChildren
+): VNode
+```
+
+<ParamField path="type" type="string | Component | symbol" required>
+  The type of VNode to create. Can be:
+  - HTML tag name as string (e.g., `'div'`, `'span'`)
+  - Component object or constructor
+  - Special symbols: `Fragment`, `Text`, `Comment`, `Teleport`, `Suspense`
+</ParamField>
+
+<ParamField path="props" type="object | null">
+  Props and attributes to apply to the element or component. Can include:
+  - Standard HTML attributes
+  - Component props
+  - Event listeners (e.g., `onClick`, `onInput`)
+  - Special properties (`key`, `ref`, etc.)
+  
+  Set to `null` or omit when passing children without props.
+</ParamField>
+
+<ParamField path="children" type="RawChildren | RawSlots">
+  The children of the VNode. Can be:
+  - String or number (text content)
+  - Single VNode
+  - Array of VNodes
+  - Function (default slot for components)
+  - Object of slot functions (named slots for components)
+</ParamField>
+
+### Returns
+
+A VNode object representing the virtual DOM node.
+
+### Basic Usage
+
+```js
+import { h } from 'vue'
+
+export default {
+  render() {
+    // Element with no props or children
+    return h('div')
+  }
+}
+```
+
+### Element with Props
+
+```js
+import { h } from 'vue'
+
+export default {
+  render() {
+    return h(
+      'div',
+      {
+        id: 'foo',
+        class: 'bar',
+        onClick: () => console.log('clicked')
+      },
+      'Hello'
+    )
+  }
+}
+```
+
+### Nested Elements
+
+```js
+import { h } from 'vue'
+
+export default {
+  render() {
+    return h('div', { class: 'container' }, [
+      h('h1', 'Title'),
+      h('p', 'Paragraph text'),
+      h('button', { onClick: this.handleClick }, 'Click me')
+    ])
+  }
+}
+```
+
+### Omitting Props
+
+```js
+import { h } from 'vue'
+
+// When passing children without props, omit the second argument
+h('div', [
+  h('span', 'Hello')
+])
+
+// Text child
+h('div', 'Hello')
+
+// Single VNode child
+h('div', h('span', 'Hello'))
+```
+
+### Component Usage
+
+```js
+import { h } from 'vue'
+import MyComponent from './MyComponent.vue'
+
+export default {
+  render() {
+    // Component with props
+    return h(MyComponent, {
+      msg: 'Hello',
+      onCustomEvent: this.handleEvent
+    })
+  }
+}
+```
+
+### Named Slots
+
+```js
+import { h } from 'vue'
+import MyComponent from './MyComponent.vue'
+
+export default {
+  render() {
+    return h(MyComponent, null, {
+      // Object of slot functions
+      default: () => 'Default slot content',
+      header: () => h('h1', 'Header'),
+      footer: () => h('p', 'Footer')
+    })
+  }
+}
+```
+
+### Fragments
+
+```js
+import { h, Fragment } from 'vue'
+
+export default {
+  render() {
+    return h(Fragment, [
+      h('div', 'First'),
+      h('div', 'Second'),
+      h('div', 'Third')
+    ])
+  }
+}
+```
+
+<Note>
+The compiler converts templates to `createVNode()` calls, not `h()`. Use `h()` only in manually written render functions.
+</Note>
+
+---
+
+## createVNode()
+
+Creates a Virtual Node. This is the internal function used by the compiler. Use `h()` for manually written render functions.
+
+**Type Signature:**
+```ts
+function createVNode(
+  type: VNodeTypes,
+  props?: VNodeProps | null,
+  children?: unknown,
+  patchFlag?: number,
+  dynamicProps?: string[] | null,
+  isBlockNode?: boolean
+): VNode
+```
+
+<ParamField path="type" type="VNodeTypes" required>
+  The type of VNode (string, Component, or symbol).
+</ParamField>
+
+<ParamField path="props" type="VNodeProps | null">
+  Props object including key, ref, and other attributes.
+</ParamField>
+
+<ParamField path="children" type="unknown">
+  Children nodes (string, VNode, or array of VNodes).
+</ParamField>
+
+<ParamField path="patchFlag" type="number">
+  Optimization hint for the patch process (compiler-generated).
+</ParamField>
+
+<ParamField path="dynamicProps" type="string[] | null">
+  Array of dynamic prop keys for optimization (compiler-generated).
+</ParamField>
+
+<ParamField path="isBlockNode" type="boolean">
+  Whether this VNode should be treated as a block node.
+</ParamField>
+
+### Returns
+
+A VNode object.
+
+### Usage
+
+```js
+import { createVNode } from 'vue'
+
+const vnode = createVNode('div', { id: 'foo' }, 'hello')
+```
+
+<Warning>
+Prefer `h()` for manual render functions. `createVNode()` is primarily for compiler-generated code and advanced use cases.
+</Warning>
+
+---
+
+## VNode Interface
+
+The VNode interface represents a Virtual DOM node.
+
+**Type Definition:**
+```ts
+interface VNode<
+  HostNode = RendererNode,
+  HostElement = RendererElement,
+  ExtraProps = { [key: string]: any }
+> {
+  type: VNodeTypes
+  props: (VNodeProps & ExtraProps) | null
+  key: PropertyKey | null
+  ref: VNodeNormalizedRef | null
+  children: VNodeNormalizedChildren
+  component: ComponentInternalInstance | null
+  
+  // DOM
+  el: HostNode | null
+  anchor: HostNode | null
+  target: HostElement | null
+  
+  // Optimization
+  shapeFlag: number
+  patchFlag: number
+  dynamicProps: string[] | null
+  dynamicChildren: VNode[] | null
+}
+```
+
+### Key Properties
+
+<ParamField path="type" type="VNodeTypes">
+  The type of the VNode (tag name, component, or symbol).
+</ParamField>
+
+<ParamField path="props" type="VNodeProps | null">
+  Props and attributes including `key`, `ref`, and event listeners.
+</ParamField>
+
+<ParamField path="children" type="VNodeNormalizedChildren">
+  Child VNodes, text content, or slot functions.
+</ParamField>
+
+<ParamField path="key" type="PropertyKey | null">
+  Unique key for list rendering optimization.
+</ParamField>
+
+<ParamField path="ref" type="VNodeNormalizedRef | null">
+  Template ref for accessing the DOM element or component instance.
+</ParamField>
+
+<ParamField path="el" type="HostNode | null">
+  Reference to the actual DOM node (set during mounting).
+</ParamField>
+
+<ParamField path="component" type="ComponentInternalInstance | null">
+  Reference to the component instance (for component VNodes).
+</ParamField>
+
+---
+
+## VNode Types
+
+Special symbols and types used in VNode creation.
+
+### Fragment
+
+Symbol for creating fragment nodes (multiple root elements).
+
+```js
+import { h, Fragment } from 'vue'
+
+h(Fragment, [
+  h('div', 'First'),
+  h('div', 'Second')
+])
+```
+
+### Text
+
+Symbol for creating text nodes.
+
+```js
+import { h, Text } from 'vue'
+
+h(Text, 'Hello world')
+```
+
+### Comment
+
+Symbol for creating comment nodes.
+
+```js
+import { h, Comment } from 'vue'
+
+h(Comment, 'This is a comment')
+```
+
+---
+
+## isVNode()
+
+Checks if a value is a VNode.
+
+**Type Signature:**
+```ts
+function isVNode(value: unknown): value is VNode
+```
+
+<ParamField path="value" type="unknown" required>
+  The value to check.
+</ParamField>
+
+### Returns
+
+`true` if the value is a VNode, `false` otherwise.
+
+### Example
+
+```js
+import { h, isVNode } from 'vue'
+
+const vnode = h('div')
+const plain = { type: 'div' }
+
+console.log(isVNode(vnode)) // true
+console.log(isVNode(plain)) // false
+```
+
+---
+
+## cloneVNode()
+
+Clones a VNode with optional props and children override.
+
+**Type Signature:**
+```ts
+function cloneVNode(
+  vnode: VNode,
+  extraProps?: VNodeProps | null,
+  mergeRef?: boolean
+): VNode
+```
+
+<ParamField path="vnode" type="VNode" required>
+  The VNode to clone.
+</ParamField>
+
+<ParamField path="extraProps" type="VNodeProps | null">
+  Additional props to merge with the original props.
+</ParamField>
+
+<ParamField path="mergeRef" type="boolean">
+  Whether to merge the ref. Defaults to `false`.
+</ParamField>
+
+### Returns
+
+A new cloned VNode.
+
+### Example
+
+```js
+import { h, cloneVNode } from 'vue'
+
+const original = h('div', { class: 'foo' }, 'Hello')
+const cloned = cloneVNode(original, { id: 'bar' })
+
+// cloned has both class="foo" and id="bar"
+```
+
+<Note>
+Cloning VNodes is useful for slot manipulation and higher-order component patterns.
+</Note>

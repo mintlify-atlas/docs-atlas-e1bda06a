@@ -1,0 +1,651 @@
+---
+title: Components Basics
+description: Learn how to create and use Vue components, the building blocks of Vue applications.
+---
+
+Components are reusable Vue instances with custom names. They accept the same options as the root Vue instance and have their own template, data, methods, and lifecycle hooks.
+
+## Defining a Component
+
+Components can be defined using Single-File Components (SFCs) with the `.vue` extension:
+
+```vue
+<!-- ButtonCounter.vue -->
+<template>
+  <button @click="count++">
+    You clicked me {{ count }} times
+  </button>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const count = ref(0)
+</script>
+
+<style scoped>
+button {
+  padding: 10px 20px;
+  background: #42b983;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+}
+</style>
+```
+
+## Using a Component
+
+Import and use the component in another component:
+
+```vue
+<template>
+  <div>
+    <h1>Here are many child components!</h1>
+    <ButtonCounter />
+    <ButtonCounter />
+    <ButtonCounter />
+  </div>
+</template>
+
+<script setup>
+import ButtonCounter from './ButtonCounter.vue'
+</script>
+```
+
+<Note>
+  Each component instance maintains its own separate state. Each `ButtonCounter` has its own independent `count`.
+</Note>
+
+## Component Registration
+
+### Global Registration
+
+Register components globally to use them anywhere:
+
+```typescript
+import { createApp } from 'vue'
+import App from './App.vue'
+import ButtonCounter from './components/ButtonCounter.vue'
+
+const app = createApp(App)
+
+// Register globally
+app.component('ButtonCounter', ButtonCounter)
+
+app.mount('#app')
+```
+
+Now `ButtonCounter` can be used in any component without importing:
+
+```vue
+<template>
+  <ButtonCounter />
+</template>
+
+<!-- No import needed -->
+```
+
+### Local Registration
+
+With `<script setup>`, imported components are automatically locally registered:
+
+```vue
+<template>
+  <ButtonCounter />
+</template>
+
+<script setup>
+import ButtonCounter from './ButtonCounter.vue'
+// Automatically registered
+</script>
+```
+
+<Tip>
+  Local registration is recommended as it:
+  - Makes dependencies more explicit
+  - Enables tree-shaking (unused components won't be included in bundle)
+  - Improves IDE autocomplete
+</Tip>
+
+## Passing Data with Props
+
+From `packages/runtime-core/src/componentProps.ts`, props allow parent components to pass data to child components:
+
+<CodeGroup>
+```vue ChildComponent.vue
+<template>
+  <div>
+    <h3>{{ title }}</h3>
+    <p>{{ message }}</p>
+  </div>
+</template>
+
+<script setup>
+// Declare props
+defineProps({
+  title: String,
+  message: String
+})
+</script>
+```
+
+```vue Parent.vue
+<template>
+  <ChildComponent
+    title="Hello"
+    message="Welcome to Vue!"
+  />
+</template>
+
+<script setup>
+import ChildComponent from './ChildComponent.vue'
+</script>
+```
+</CodeGroup>
+
+### Prop Types
+
+Define prop types for validation:
+
+```vue
+<script setup>
+defineProps({
+  title: String,
+  count: Number,
+  isActive: Boolean,
+  tags: Array,
+  user: Object,
+  callback: Function
+})
+</script>
+```
+
+### Advanced Prop Definitions
+
+```vue
+<script setup>
+defineProps({
+  // Basic type check
+  title: String,
+  
+  // Multiple possible types
+  message: [String, Number],
+  
+  // Required prop
+  id: {
+    type: Number,
+    required: true
+  },
+  
+  // With default value
+  status: {
+    type: String,
+    default: 'pending'
+  },
+  
+  // Object/array defaults need factory function
+  user: {
+    type: Object,
+    default: () => ({ name: 'Guest' })
+  },
+  
+  // Custom validator
+  age: {
+    type: Number,
+    validator: (value) => value >= 0
+  }
+})
+</script>
+```
+
+### TypeScript Props
+
+Use TypeScript for better type safety:
+
+```vue
+<script setup lang="ts">
+interface Props {
+  title: string
+  count?: number
+  tags: string[]
+  user: {
+    name: string
+    age: number
+  }
+}
+
+const props = defineProps<Props>()
+
+// With defaults
+const props = withDefaults(defineProps<Props>(), {
+  count: 0,
+  tags: () => []
+})
+</script>
+```
+
+## Emitting Events
+
+Child components can emit events to communicate with parents:
+
+<CodeGroup>
+```vue ChildComponent.vue
+<template>
+  <button @click="handleClick">
+    Click me
+  </button>
+</template>
+
+<script setup>
+const emit = defineEmits(['clicked'])
+
+function handleClick() {
+  emit('clicked', 'Hello from child')
+}
+</script>
+```
+
+```vue Parent.vue
+<template>
+  <ChildComponent @clicked="onClicked" />
+</template>
+
+<script setup>
+import ChildComponent from './ChildComponent.vue'
+
+function onClicked(message) {
+  console.log(message) // 'Hello from child'
+}
+</script>
+```
+</CodeGroup>
+
+### Declaring Emits
+
+```vue
+<script setup>
+// Array syntax
+const emit = defineEmits(['change', 'update'])
+
+// Object syntax with validation
+const emit = defineEmits({
+  change: (value) => {
+    // Return true if valid
+    return typeof value === 'string'
+  },
+  update: null // No validation
+})
+
+// TypeScript syntax
+const emit = defineEmits<{
+  change: [value: string]
+  update: [id: number, value: string]
+}>()
+</script>
+```
+
+## v-model on Components
+
+Create two-way bindings on custom components:
+
+<CodeGroup>
+```vue CustomInput.vue
+<template>
+  <input
+    :value="modelValue"
+    @input="$emit('update:modelValue', $event.target.value)"
+  />
+</template>
+
+<script setup>
+defineProps(['modelValue'])
+defineEmits(['update:modelValue'])
+</script>
+```
+
+```vue Parent.vue
+<template>
+  <CustomInput v-model="searchText" />
+  <p>Search: {{ searchText }}</p>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import CustomInput from './CustomInput.vue'
+
+const searchText = ref('')
+</script>
+```
+</CodeGroup>
+
+### Multiple v-model Bindings
+
+```vue
+<template>
+  <UserName
+    v-model:first-name="first"
+    v-model:last-name="last"
+  />
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const first = ref('')
+const last = ref('')
+</script>
+```
+
+## Slots
+
+Slots allow you to pass template content to child components:
+
+<CodeGroup>
+```vue Card.vue
+<template>
+  <div class="card">
+    <div class="card-header">
+      <slot name="header">Default Header</slot>
+    </div>
+    <div class="card-body">
+      <slot>Default Content</slot>
+    </div>
+    <div class="card-footer">
+      <slot name="footer"></slot>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.card {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+</style>
+```
+
+```vue Using Slots
+<template>
+  <Card>
+    <template #header>
+      <h2>My Card Title</h2>
+    </template>
+    
+    <p>This is the main content</p>
+    <p>Multiple elements work too</p>
+    
+    <template #footer>
+      <button>Action</button>
+    </template>
+  </Card>
+</template>
+```
+</CodeGroup>
+
+### Scoped Slots
+
+Pass data from child to parent through slots:
+
+<CodeGroup>
+```vue List.vue
+<template>
+  <ul>
+    <li v-for="item in items" :key="item.id">
+      <slot :item="item" :index="item.id">
+        {{ item.name }}
+      </slot>
+    </li>
+  </ul>
+</template>
+
+<script setup>
+defineProps({
+  items: Array
+})
+</script>
+```
+
+```vue Using Scoped Slots
+<template>
+  <List :items="items">
+    <template #default="{ item, index }">
+      <strong>{{ index }}:</strong> {{ item.name }}
+    </template>
+  </List>
+</template>
+```
+</CodeGroup>
+
+## Dynamic Components
+
+Switch between components dynamically:
+
+```vue
+<template>
+  <div>
+    <button
+      v-for="tab in tabs"
+      :key="tab"
+      @click="currentTab = tab"
+    >
+      {{ tab }}
+    </button>
+    
+    <component :is="currentComponent" />
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+import Home from './Home.vue'
+import Posts from './Posts.vue'
+import Archive from './Archive.vue'
+
+const tabs = ['Home', 'Posts', 'Archive']
+const currentTab = ref('Home')
+
+const components = { Home, Posts, Archive }
+
+const currentComponent = computed(() => {
+  return components[currentTab.value]
+})
+</script>
+```
+
+## Keep-Alive
+
+Cache component instances when switching:
+
+```vue
+<template>
+  <KeepAlive>
+    <component :is="currentComponent" />
+  </KeepAlive>
+</template>
+```
+
+<Tip>
+  `<KeepAlive>` preserves component state and avoids re-rendering when components are toggled. Use the `include`, `exclude`, and `max` props to control caching behavior.
+</Tip>
+
+## Async Components
+
+From `packages/runtime-core/src/apiAsyncComponent.ts`, load components asynchronously:
+
+```vue
+<script setup>
+import { defineAsyncComponent } from 'vue'
+
+const AsyncComp = defineAsyncComponent(() =>
+  import('./components/AsyncComponent.vue')
+)
+
+// With options
+const AsyncCompWithOptions = defineAsyncComponent({
+  loader: () => import('./AsyncComponent.vue'),
+  loadingComponent: LoadingComponent,
+  errorComponent: ErrorComponent,
+  delay: 200,
+  timeout: 3000
+})
+</script>
+
+<template>
+  <AsyncComp />
+</template>
+```
+
+## Provide / Inject
+
+Pass data to descendant components without prop drilling:
+
+<CodeGroup>
+```vue Parent.vue
+<script setup>
+import { provide, ref } from 'vue'
+
+const theme = ref('dark')
+const user = ref({ name: 'John' })
+
+// Provide to descendants
+provide('theme', theme)
+provide('user', user)
+</script>
+```
+
+```vue Descendant.vue
+<script setup>
+import { inject } from 'vue'
+
+// Inject from ancestor
+const theme = inject('theme')
+const user = inject('user')
+
+// With default value
+const locale = inject('locale', 'en')
+</script>
+
+<template>
+  <div :class="theme">
+    Welcome, {{ user.name }}
+  </div>
+</template>
+```
+</CodeGroup>
+
+## Component Naming Conventions
+
+<Steps>
+  <Step title="PascalCase for files">
+    Name component files using PascalCase:
+    - `ButtonCounter.vue`
+    - `UserProfile.vue`
+    - `TodoItem.vue`
+  </Step>
+
+  <Step title="PascalCase in templates">
+    Use PascalCase in templates (recommended):
+    ```vue
+    <ButtonCounter />
+    <UserProfile />
+    ```
+  </Step>
+
+  <Step title="kebab-case alternative">
+    kebab-case also works:
+    ```vue
+    <button-counter />
+    <user-profile />
+    ```
+  </Step>
+</Steps>
+
+## defineComponent
+
+From `packages/runtime-core/src/apiDefineComponent.ts:63`, use `defineComponent` for better TypeScript inference:
+
+```typescript
+import { defineComponent } from 'vue'
+
+export default defineComponent({
+  props: {
+    message: String
+  },
+  setup(props) {
+    // props are typed!
+    console.log(props.message)
+  }
+})
+```
+
+<Note>
+  With `<script setup>`, you don't need `defineComponent` as type inference works automatically.
+</Note>
+
+## Component Instance Access
+
+From `packages/runtime-core/src/component.ts:106`, access the component instance:
+
+```vue
+<script setup>
+import { getCurrentInstance } from 'vue'
+
+const instance = getCurrentInstance()
+
+if (instance) {
+  console.log(instance.type.name)
+  console.log(instance.proxy) // Component public instance
+}
+</script>
+```
+
+<Warning>
+  `getCurrentInstance()` is an advanced API for library authors. Avoid using it in application code as it exposes internal details.
+</Warning>
+
+## Best Practices
+
+<Steps>
+  <Step title="Single Responsibility">
+    Each component should have a single, well-defined purpose.
+  </Step>
+
+  <Step title="Props Down, Events Up">
+    Pass data down via props, communicate up via events.
+  </Step>
+
+  <Step title="Validate Props">
+    Always define prop types and add validation when needed.
+  </Step>
+
+  <Step title="Use Scoped Styles">
+    Add `scoped` attribute to `<style>` to prevent style leaks:
+    ```vue
+    <style scoped>
+    /* Styles only apply to this component */
+    </style>
+    ```
+  </Step>
+
+  <Step title="Extract Reusable Logic">
+    Use composables for reusable logic instead of mixins.
+  </Step>
+</Steps>
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Reactivity Fundamentals" icon="bolt" href="/essentials/reactivity-fundamentals">
+    Component state with ref() and reactive()
+  </Card>
+  
+  <Card title="Template Refs" icon="link" href="/essentials/template-refs">
+    Access component instances
+  </Card>
+  
+  <Card title="Lifecycle Hooks" icon="clock" href="/essentials/lifecycle-hooks">
+    Component lifecycle management
+  </Card>
+</CardGroup>

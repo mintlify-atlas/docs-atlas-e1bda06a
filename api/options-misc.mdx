@@ -1,0 +1,207 @@
+---
+title: Options - Misc
+---
+
+## name
+
+<ParamField path="name" type="string">
+  Explicitly declare a display name for the component.
+
+  The name is used for:
+  - Recursive self-reference in the component's own template
+  - Display in Vue DevTools' component inspection tree
+  - Display in warning component traces
+
+  When you use Single-File Components, the component already infers its own name from the filename. For example, a file named `MyComponent.vue` will have the inferred display name "MyComponent".
+
+  Another case is that when a component is registered globally with `app.component`, the global ID is automatically set as its name.
+
+  The `name` option allows you to override the inferred name, or to explicitly provide a name when no name can be inferred (e.g., when not using build tools, or an inlined non-SFC component).
+
+  There is one case where `name` is explicitly necessary: when matching against cacheable components in `<KeepAlive>` via its `include / exclude` props.
+
+  **Example:**
+  ```js
+  export default {
+    name: 'TodoItem',
+    // This component can now reference itself as <TodoItem> in its own template
+    template: `
+      <div>
+        <TodoItem v-for="child in children" :key="child.id" />
+      </div>
+    `
+  }
+  ```
+</ParamField>
+
+## inheritAttrs
+
+<ParamField path="inheritAttrs" type="boolean" default="true">
+  Controls whether default component attribute fallthrough behavior should be enabled.
+
+  By default, parent scope attribute bindings that are not recognized as props will "fallthrough". This means that when we have a single-root component, these bindings will be applied to the root element of the child component as normal HTML attributes. When authoring a component that wraps a target element or another component, this may not always be the desired behavior. By setting `inheritAttrs` to `false`, this default behavior can be disabled.
+
+  The attributes are available via the `$attrs` instance property and can be explicitly bound to a non-root element using `v-bind`.
+
+  **Example:**
+  ```js
+  export default {
+    inheritAttrs: false,
+    props: ['label'],
+    template: `
+      <label>
+        {{ label }}
+        <input v-bind="$attrs" />
+      </label>
+    `
+  }
+  ```
+
+  When using this component:
+  ```vue
+  <MyComponent label="Username" type="text" placeholder="Enter username" />
+  ```
+
+  With `inheritAttrs: false`, the `type` and `placeholder` attributes will not be applied to the root `<label>` element, but instead will be applied to the `<input>` element via `v-bind="$attrs"`.
+
+  **Note:**
+  - This option does not affect `class` and `style` bindings.
+  - Since Vue 3.3+, when using `<script setup>`, you can use the `defineOptions()` macro to set this option:
+    ```vue
+    <script setup>
+    defineOptions({
+      inheritAttrs: false
+    })
+    </script>
+    ```
+</ParamField>
+
+## components
+
+<ParamField path="components" type="Object">
+  An object that makes components available to the component instance.
+
+  This option allows you to register components that will be available for use in the component's template. The object's keys will be used as the component names in templates, and the values should be the component definition objects.
+
+  **Example:**
+  ```js
+  import ComponentA from './ComponentA.vue'
+  import ComponentB from './ComponentB.vue'
+
+  export default {
+    components: {
+      ComponentA,
+      ComponentB
+    },
+    template: `
+      <div>
+        <ComponentA />
+        <ComponentB />
+      </div>
+    `
+  }
+  ```
+
+  **Custom naming:**
+  ```js
+  import TodoItem from './TodoItem.vue'
+
+  export default {
+    components: {
+      // register under a different name
+      'todo-item': TodoItem
+    },
+    template: `
+      <div>
+        <todo-item />
+      </div>
+    `
+  }
+  ```
+
+  **Note:** With Single-File Components using `<script setup>`, imported components can be used directly in the template without registration:
+  ```vue
+  <script setup>
+  import ComponentA from './ComponentA.vue'
+  // No need to register, can use directly in template
+  </script>
+
+  <template>
+    <ComponentA />
+  </template>
+  ```
+</ParamField>
+
+## directives
+
+<ParamField path="directives" type="Object">
+  An object that makes directives available to the component instance.
+
+  This option allows you to register custom directives that will be available for use in the component's template. The object's keys will be used as the directive names, and the values should be the directive definition objects or functions.
+
+  **Example:**
+  ```js
+  export default {
+    directives: {
+      // Register a local custom directive called v-focus
+      focus: {
+        mounted(el) {
+          el.focus()
+        }
+      },
+      // Function shorthand (called on mounted and updated)
+      highlight: (el, binding) => {
+        el.style.backgroundColor = binding.value
+      }
+    },
+    template: `
+      <div>
+        <input v-focus />
+        <p v-highlight="'yellow'">Highlighted text</p>
+      </div>
+    `
+  }
+  ```
+
+  **Directive object with lifecycle hooks:**
+  ```js
+  export default {
+    directives: {
+      pin: {
+        mounted(el, binding) {
+          el.style.position = 'fixed'
+          el.style.top = binding.value + 'px'
+        },
+        updated(el, binding) {
+          el.style.top = binding.value + 'px'
+        }
+      }
+    }
+  }
+  ```
+
+  **Directive Definition:**
+
+  A directive definition object can provide several hook functions (all optional):
+  - `created`: Called before the element's attributes or event listeners are applied
+  - `beforeMount`: Called when the directive is first bound to the element and before parent component is mounted
+  - `mounted`: Called when the bound element's parent component is mounted
+  - `beforeUpdate`: Called before the containing component's VNode is updated
+  - `updated`: Called after the containing component's VNode and the VNodes of its children have updated
+  - `beforeUnmount`: Called before the bound element's parent component is unmounted
+  - `unmounted`: Called when the directive is unbound from the element and the parent component is unmounted
+
+  **Note:** With Single-File Components using `<script setup>`, any camelCase variable that starts with the `v` prefix can be used as a custom directive:
+  ```vue
+  <script setup>
+  // enables v-focus in template
+  const vFocus = {
+    mounted: (el) => el.focus()
+  }
+  </script>
+
+  <template>
+    <input v-focus />
+  </template>
+  ```
+</ParamField>

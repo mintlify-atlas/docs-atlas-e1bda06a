@@ -1,0 +1,565 @@
+---
+title: Plugins
+description: Learn how to create and use plugins to add global functionality and features to your Vue.js applications.
+---
+
+# Plugins
+
+Plugins are self-contained code that add global-level functionality to Vue applications. They are the primary mechanism for distributing reusable functionality to the Vue community.
+
+## What is a Plugin?
+
+A plugin is either:
+
+1. An object with an `install` method
+2. A function that acts as the install function
+
+Plugins typically add:
+
+- Global components
+- Global directives
+- Global properties or methods
+- Global mixins
+- Library integrations
+
+## Plugin Anatomy
+
+Based on `runtime-core/src/apiCreateApp.ts`, there are two plugin formats:
+
+### Object Plugin
+
+```typescript
+interface ObjectPlugin {
+  install(app: App, ...options: any[]): any
+}
+```
+
+Example:
+
+```javascript
+const myPlugin = {
+  install(app, options) {
+    // Configure the app
+  }
+}
+```
+
+### Function Plugin
+
+```typescript
+type FunctionPlugin = (app: App, ...options: any[]) => any
+```
+
+Example:
+
+```javascript
+function myPlugin(app, options) {
+  // Configure the app
+}
+```
+
+## Installing Plugins
+
+Use the `app.use()` method to install plugins:
+
+```javascript
+import { createApp } from 'vue'
+import App from './App.vue'
+import myPlugin from './plugins/myPlugin'
+
+const app = createApp(App)
+
+// Install plugin without options
+app.use(myPlugin)
+
+// Install plugin with options
+app.use(myPlugin, {
+  apiKey: 'abc123',
+  theme: 'dark'
+})
+
+app.mount('#app')
+```
+
+### Plugin Installation Behavior
+
+From the source implementation:
+
+```javascript
+app.use(plugin, ...options) {
+  if (installedPlugins.has(plugin)) {
+    warn(`Plugin has already been applied to target app.`)
+  } else if (plugin && isFunction(plugin.install)) {
+    installedPlugins.add(plugin)
+    plugin.install(app, ...options)
+  } else if (isFunction(plugin)) {
+    installedPlugins.add(plugin)
+    plugin(app, ...options)
+  } else {
+    warn(
+      `A plugin must either be a function or an object with an "install" function.`
+    )
+  }
+  return app
+}
+```
+
+Key behaviors:
+
+- Plugins are only installed once (duplicate installations are ignored)
+- Returns the app instance for chaining
+- Can be a function or object with `install` method
+
+## Basic Plugin Example
+
+Here's a simple plugin that adds a global method:
+
+```javascript
+// plugins/i18n.js
+export default {
+  install(app, options) {
+    // Add global property
+    app.config.globalProperties.$translate = (key) => {
+      return key.split('.').reduce((o, i) => {
+        if (o) return o[i]
+      }, options.translations)
+    }
+  }
+}
+```
+
+Usage:
+
+```javascript
+// main.js
+import i18n from './plugins/i18n'
+
+app.use(i18n, {
+  translations: {
+    greetings: {
+      hello: 'Hello!'
+    }
+  }
+})
+```
+
+In components:
+
+```vue
+<script setup>
+import { getCurrentInstance } from 'vue'
+
+const instance = getCurrentInstance()
+const translate = instance.appContext.config.globalProperties.$translate
+
+console.log(translate('greetings.hello')) // "Hello!"
+</script>
+```
+
+## Plugin Capabilities
+
+### 1. Register Global Components
+
+```javascript
+import MyComponent from './components/MyComponent.vue'
+
+export default {
+  install(app) {
+    app.component('MyComponent', MyComponent)
+  }
+}
+```
+
+### 2. Register Global Directives
+
+```javascript
+export default {
+  install(app) {
+    app.directive('focus', {
+      mounted(el) {
+        el.focus()
+      }
+    })
+  }
+}
+```
+
+### 3. Add Global Properties
+
+```javascript
+export default {
+  install(app, options) {
+    app.config.globalProperties.$api = {
+      get: (url) => fetch(url).then(r => r.json()),
+      post: (url, data) => fetch(url, { 
+        method: 'POST', 
+        body: JSON.stringify(data) 
+      })
+    }
+  }
+}
+```
+
+### 4. Provide Injectable Values
+
+```javascript
+export default {
+  install(app, options) {
+    app.provide('config', options)
+  }
+}
+```
+
+Components can then inject:
+
+```vue
+<script setup>
+import { inject } from 'vue'
+
+const config = inject('config')
+</script>
+```
+
+### 5. Add Global Mixins
+
+```javascript
+export default {
+  install(app) {
+    app.mixin({
+      created() {
+        console.log('Component created')
+      }
+    })
+  }
+}
+```
+
+**Warning**: Use global mixins sparingly as they affect every component.
+
+## Real-World Plugin: Router Integration
+
+Here's a more complete example inspired by Vue Router:
+
+```javascript
+// plugins/router.js
+import { inject, reactive } from 'vue'
+
+const RouterSymbol = Symbol('router')
+
+export function createRouter(options) {
+  const router = reactive({
+    currentRoute: options.routes[0],
+    routes: options.routes
+  })
+  
+  function push(path) {
+    const route = router.routes.find(r => r.path === path)
+    if (route) {
+      router.currentRoute = route
+      window.history.pushState({}, '', path)
+    }
+  }
+  
+  function install(app) {
+    // Provide router
+    app.provide(RouterSymbol, router)
+    
+    // Add global properties
+    app.config.globalProperties.$router = router
+    app.config.globalProperties.$route = router.currentRoute
+    
+    // Register global components
+    app.component('RouterView', {
+      setup() {
+        const router = inject(RouterSymbol)
+        return () => router.currentRoute.component
+      }
+    })
+    
+    app.component('RouterLink', {
+      props: ['to'],
+      setup(props) {
+        const router = inject(RouterSymbol)
+        return () => {
+          const onClick = (e) => {
+            e.preventDefault()
+            push(props.to)
+          }
+          return h('a', { href: props.to, onClick }, props.children)
+        }
+      }
+    })
+  }
+  
+  return {
+    install,
+    push,
+    currentRoute: router.currentRoute
+  }
+}
+
+export function useRouter() {
+  return inject(RouterSymbol)
+}
+```
+
+Usage:
+
+```javascript
+import { createApp } from 'vue'
+import { createRouter } from './plugins/router'
+import App from './App.vue'
+import Home from './views/Home.vue'
+import About from './views/About.vue'
+
+const router = createRouter({
+  routes: [
+    { path: '/', component: Home },
+    { path: '/about', component: About }
+  ]
+})
+
+const app = createApp(App)
+app.use(router)
+app.mount('#app')
+```
+
+## Plugin with TypeScript
+
+Create type-safe plugins:
+
+```typescript
+import type { App, Plugin } from 'vue'
+
+interface AnalyticsOptions {
+  trackingId: string
+  debug?: boolean
+}
+
+interface Analytics {
+  trackEvent(name: string, data?: Record<string, any>): void
+  trackPageView(path: string): void
+}
+
+const analyticsPlugin: Plugin = {
+  install(app: App, options: AnalyticsOptions) {
+    const analytics: Analytics = {
+      trackEvent(name, data) {
+        if (options.debug) {
+          console.log('Track event:', name, data)
+        }
+        // Send to analytics service
+      },
+      
+      trackPageView(path) {
+        if (options.debug) {
+          console.log('Track page view:', path)
+        }
+        // Send to analytics service
+      }
+    }
+    
+    app.provide('analytics', analytics)
+    app.config.globalProperties.$analytics = analytics
+  }
+}
+
+export default analyticsPlugin
+
+// Augment global properties type
+declare module 'vue' {
+  interface ComponentCustomProperties {
+    $analytics: Analytics
+  }
+}
+```
+
+## Plugin Configuration
+
+Handle plugin options effectively:
+
+```javascript
+const defaults = {
+  theme: 'light',
+  locale: 'en',
+  debug: false
+}
+
+export default {
+  install(app, userOptions = {}) {
+    // Merge with defaults
+    const options = { ...defaults, ...userOptions }
+    
+    // Validate options
+    if (!['light', 'dark'].includes(options.theme)) {
+      console.warn(`Invalid theme: ${options.theme}`)
+      options.theme = defaults.theme
+    }
+    
+    // Make available globally
+    app.provide('pluginConfig', options)
+    
+    // Apply configuration
+    if (options.theme === 'dark') {
+      document.documentElement.classList.add('dark')
+    }
+  }
+}
+```
+
+## Plugin Cleanup
+
+Plugins can register cleanup functions:
+
+```javascript
+export default {
+  install(app, options) {
+    // Setup
+    const interval = setInterval(() => {
+      // Do periodic work
+    }, 1000)
+    
+    // Cleanup when app unmounts
+    app.onUnmount(() => {
+      clearInterval(interval)
+    })
+  }
+}
+```
+
+Based on `apiCreateApp.ts`, the `onUnmount` hook is available on the app instance:
+
+```typescript
+app.onUnmount(cb: () => void): void
+```
+
+## Best Practices
+
+### 1. Namespace Global Properties
+
+Prefix global properties to avoid conflicts:
+
+```javascript
+// Good
+app.config.globalProperties.$myPlugin = api
+
+// Bad - might conflict
+app.config.globalProperties.api = api
+```
+
+### 2. Use Provide/Inject
+
+Prefer provide/inject over global properties:
+
+```javascript
+// Better approach
+export default {
+  install(app, options) {
+    const api = createAPI(options)
+    app.provide('api', api)
+  }
+}
+
+export function useAPI() {
+  return inject('api')
+}
+```
+
+### 3. Document Options
+
+Provide clear documentation for plugin options:
+
+```javascript
+/**
+ * My Plugin
+ * 
+ * @param {Object} options
+ * @param {string} options.apiKey - API key for service
+ * @param {boolean} [options.debug=false] - Enable debug mode
+ * @param {string} [options.baseURL] - Base URL for API calls
+ */
+export default {
+  install(app, options) {
+    // Implementation
+  }
+}
+```
+
+### 4. Support Tree-Shaking
+
+Export individual features for better tree-shaking:
+
+```javascript
+// plugins/myPlugin.js
+export { ComponentA } from './components/ComponentA'
+export { ComponentB } from './components/ComponentB'
+export { directiveX } from './directives/directiveX'
+
+export default {
+  install(app) {
+    // Register all features
+  }
+}
+
+// Users can import just what they need
+import { ComponentA } from 'my-plugin'
+```
+
+### 5. Provide TypeScript Declarations
+
+Include type declarations for TypeScript users:
+
+```typescript
+// index.d.ts
+import type { App, Plugin } from 'vue'
+
+export interface MyPluginOptions {
+  apiKey: string
+  debug?: boolean
+}
+
+export declare const myPlugin: Plugin<[MyPluginOptions]>
+export default myPlugin
+```
+
+## Testing Plugins
+
+Test plugins in isolation:
+
+```javascript
+import { createApp } from 'vue'
+import { describe, it, expect } from 'vitest'
+import myPlugin from './myPlugin'
+
+describe('myPlugin', () => {
+  it('registers global component', () => {
+    const app = createApp({})
+    app.use(myPlugin)
+    
+    expect(app.component('MyComponent')).toBeDefined()
+  })
+  
+  it('adds global property', () => {
+    const app = createApp({})
+    app.use(myPlugin, { apiKey: 'test' })
+    
+    expect(app.config.globalProperties.$api).toBeDefined()
+  })
+})
+```
+
+## Plugin Examples
+
+Popular Vue plugins to study:
+
+- **Vue Router**: Routing solution
+- **Pinia**: State management
+- **Vue I18n**: Internationalization
+- **VueUse**: Collection of composables
+- **Vuelidate**: Form validation
+
+## Related
+
+- [Composables](/reusability/composables)
+- [Custom Directives](/reusability/custom-directives)
+- [Application API](/api/application)

@@ -1,0 +1,461 @@
+---
+title: State Management
+description: Managing application state with Pinia and other state management patterns in Vue.js
+---
+
+# State Management
+
+As applications grow in complexity, managing state across multiple components becomes challenging. Vue offers several approaches to state management, from simple reactive objects to full-featured state management libraries.
+
+## When Do You Need State Management?
+
+You might need centralized state management when:
+
+- Multiple components share the same state
+- Components in different parts of the tree need to access the same data
+- State needs to persist across route changes
+- Complex state logic needs to be reused
+- You need time-travel debugging or state persistence
+
+## Simple State Management
+
+For smaller applications, a reactive object can serve as a simple store:
+
+```js
+// store.js
+import { reactive } from 'vue'
+
+export const store = reactive({
+  count: 0,
+  increment() {
+    this.count++
+  }
+})
+```
+
+```vue
+<!-- ComponentA.vue -->
+<script setup>
+import { store } from './store'
+</script>
+
+<template>
+  <div>Count: {{ store.count }}</div>
+  <button @click="store.increment()">Increment</button>
+</template>
+```
+
+## Pinia - The Official State Management Library
+
+Pinia is the officially recommended state management library for Vue. It provides a type-safe, intuitive API with excellent DevTools integration.
+
+### Installation
+
+```bash
+npm install pinia
+```
+
+### Setup
+
+```js
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import App from './App.vue'
+
+const pinia = createPinia()
+const app = createApp(App)
+
+app.use(pinia)
+app.mount('#app')
+```
+
+### Defining a Store
+
+#### Options API Style
+
+```js
+import { defineStore } from 'pinia'
+
+export const useCounterStore = defineStore('counter', {
+  state: () => ({
+    count: 0,
+    name: 'Eduardo'
+  }),
+  
+  getters: {
+    doubleCount: (state) => state.count * 2
+  },
+  
+  actions: {
+    increment() {
+      this.count++
+    },
+    async fetchCount() {
+      const response = await fetch('/api/count')
+      this.count = await response.json()
+    }
+  }
+})
+```
+
+#### Setup Style
+
+```js
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+
+export const useCounterStore = defineStore('counter', () => {
+  const count = ref(0)
+  const name = ref('Eduardo')
+  
+  const doubleCount = computed(() => count.value * 2)
+  
+  function increment() {
+    count.value++
+  }
+  
+  async function fetchCount() {
+    const response = await fetch('/api/count')
+    count.value = await response.json()
+  }
+  
+  return { count, name, doubleCount, increment, fetchCount }
+})
+```
+
+### Using a Store
+
+```vue
+<script setup>
+import { useCounterStore } from '@/stores/counter'
+
+const counter = useCounterStore()
+
+// Access state
+console.log(counter.count)
+
+// Access getters
+console.log(counter.doubleCount)
+
+// Call actions
+counter.increment()
+</script>
+
+<template>
+  <div>Count: {{ counter.count }}</div>
+  <div>Double: {{ counter.doubleCount }}</div>
+  <button @click="counter.increment()">Increment</button>
+</template>
+```
+
+### Destructuring with Reactivity
+
+Use `storeToRefs()` to destructure state while maintaining reactivity:
+
+```vue
+<script setup>
+import { storeToRefs } from 'pinia'
+import { useCounterStore } from '@/stores/counter'
+
+const counter = useCounterStore()
+const { count, doubleCount } = storeToRefs(counter)
+const { increment } = counter
+</script>
+
+<template>
+  <div>Count: {{ count }}</div>
+  <button @click="increment()">Increment</button>
+</template>
+```
+
+## Core Concepts
+
+### State
+
+The store's data:
+
+```js
+state: () => ({
+  user: null,
+  items: [],
+  loading: false
+})
+```
+
+### Getters
+
+Computed values derived from state:
+
+```js
+getters: {
+  completedItems: (state) => state.items.filter(item => item.completed),
+  itemCount: (state) => state.items.length,
+  
+  // Access other getters
+  completedCount() {
+    return this.completedItems.length
+  },
+  
+  // Return a function for parameters
+  getItemById: (state) => (id) => {
+    return state.items.find(item => item.id === id)
+  }
+}
+```
+
+### Actions
+
+Methods that can modify state and perform async operations:
+
+```js
+actions: {
+  addItem(item) {
+    this.items.push(item)
+  },
+  
+  async loadItems() {
+    this.loading = true
+    try {
+      const response = await fetch('/api/items')
+      this.items = await response.json()
+    } catch (error) {
+      console.error('Failed to load items:', error)
+    } finally {
+      this.loading = false
+    }
+  },
+  
+  // Actions can call other actions
+  async refreshItems() {
+    await this.loadItems()
+    this.sortItems()
+  }
+}
+```
+
+## Advanced Features
+
+### Subscribing to State Changes
+
+```js
+const counter = useCounterStore()
+
+counter.$subscribe((mutation, state) => {
+  console.log(mutation.type) // 'direct' | 'patch object' | 'patch function'
+  console.log(mutation.storeId) // 'counter'
+  console.log(state.count)
+  
+  // Persist to localStorage
+  localStorage.setItem('counter', JSON.stringify(state))
+})
+```
+
+### Subscribing to Actions
+
+```js
+counter.$onAction(({ name, args, after, onError }) => {
+  console.log(`Action "${name}" called with args:`, args)
+  
+  after((result) => {
+    console.log('Action completed with result:', result)
+  })
+  
+  onError((error) => {
+    console.error('Action failed:', error)
+  })
+})
+```
+
+### Plugins
+
+Extend Pinia with plugins:
+
+```js
+import { createPinia } from 'pinia'
+
+function persistencePlugin({ store }) {
+  const stored = localStorage.getItem(store.$id)
+  if (stored) {
+    store.$patch(JSON.parse(stored))
+  }
+  
+  store.$subscribe((mutation, state) => {
+    localStorage.setItem(store.$id, JSON.stringify(state))
+  })
+}
+
+const pinia = createPinia()
+pinia.use(persistencePlugin)
+```
+
+### Hot Module Replacement
+
+Preserve state during development:
+
+```js
+import { defineStore, acceptHMRUpdate } from 'pinia'
+
+export const useCounterStore = defineStore('counter', {
+  // ...
+})
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useCounterStore, import.meta.hot))
+}
+```
+
+## Composing Stores
+
+Stores can use other stores:
+
+```js
+import { defineStore } from 'pinia'
+import { useUserStore } from './user'
+
+export const useCartStore = defineStore('cart', () => {
+  const userStore = useUserStore()
+  const items = ref([])
+  
+  function addItem(item) {
+    if (!userStore.isLoggedIn) {
+      throw new Error('User must be logged in')
+    }
+    items.value.push(item)
+  }
+  
+  return { items, addItem }
+})
+```
+
+## TypeScript Support
+
+Pinia provides excellent TypeScript support out of the box:
+
+```ts
+import { defineStore } from 'pinia'
+
+interface User {
+  id: number
+  name: string
+  email: string
+}
+
+export const useUserStore = defineStore('user', {
+  state: () => ({
+    user: null as User | null,
+    token: '' as string
+  }),
+  
+  getters: {
+    isLoggedIn: (state): boolean => state.user !== null
+  },
+  
+  actions: {
+    async login(email: string, password: string): Promise<void> {
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password })
+      })
+      const data = await response.json()
+      this.user = data.user
+      this.token = data.token
+    }
+  }
+})
+```
+
+## Testing
+
+### Unit Testing Stores
+
+```js
+import { setActivePinia, createPinia } from 'pinia'
+import { useCounterStore } from '@/stores/counter'
+import { describe, it, expect, beforeEach } from 'vitest'
+
+describe('Counter Store', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+  
+  it('increments count', () => {
+    const counter = useCounterStore()
+    expect(counter.count).toBe(0)
+    counter.increment()
+    expect(counter.count).toBe(1)
+  })
+  
+  it('doubles count', () => {
+    const counter = useCounterStore()
+    counter.count = 5
+    expect(counter.doubleCount).toBe(10)
+  })
+})
+```
+
+### Testing Components with Stores
+
+```js
+import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import MyComponent from './MyComponent.vue'
+
+const pinia = createPinia()
+
+const wrapper = mount(MyComponent, {
+  global: {
+    plugins: [pinia]
+  }
+})
+```
+
+## Migration from Vuex
+
+If you're migrating from Vuex:
+
+- No mutations - use actions directly
+- No nested modules - create separate stores
+- Simpler API with less boilerplate
+- Better TypeScript support
+- Smaller bundle size
+
+### Comparison
+
+**Vuex:**
+```js
+// mutations
+SET_COUNT(state, count) {
+  state.count = count
+}
+
+// actions
+increment({ commit }) {
+  commit('SET_COUNT', state.count + 1)
+}
+```
+
+**Pinia:**
+```js
+// Just actions
+increment() {
+  this.count++
+}
+```
+
+## Best Practices
+
+1. **One store per domain** - Separate stores by feature/domain
+2. **Keep stores focused** - Don't create one massive store
+3. **Use actions for async logic** - Keep getters synchronous
+4. **Compose stores** - Reuse logic by accessing other stores
+5. **Use TypeScript** - Leverage type safety
+6. **Avoid direct state mutation outside actions** in Options API style
+7. **Use plugins for cross-cutting concerns** like persistence
+8. **Test stores in isolation** - Unit test store logic separately
+
+## Resources
+
+- [Pinia Documentation](https://pinia.vuejs.org/)
+- [Pinia GitHub](https://github.com/vuejs/pinia)
+- [Vue State Management Guide](https://vuejs.org/guide/scaling-up/state-management)
+- [Migration from Vuex](https://pinia.vuejs.org/cookbook/migration-vuex)

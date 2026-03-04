@@ -1,0 +1,578 @@
+---
+title: List Rendering
+description: Learn how to render lists of items in Vue using the v-for directive with proper key management.
+---
+
+The `v-for` directive is used to render a list of items based on an array or object.
+
+## Basic List Rendering
+
+Use `v-for` to render a list based on an array:
+
+```vue
+<template>
+  <ul>
+    <li v-for="item in items" :key="item.id">
+      {{ item.text }}
+    </li>
+  </ul>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const items = ref([
+  { id: 1, text: 'First item' },
+  { id: 2, text: 'Second item' },
+  { id: 3, text: 'Third item' }
+])
+</script>
+```
+
+## v-for with Index
+
+Access the index of the current item:
+
+```vue
+<template>
+  <ul>
+    <li v-for="(item, index) in items" :key="item.id">
+      {{ index }}: {{ item.text }}
+    </li>
+  </ul>
+</template>
+```
+
+<ParamField path="item" type="T">
+  The current element being iterated
+</ParamField>
+
+<ParamField path="index" type="number">
+  The index of the current element (optional, 0-based)
+</ParamField>
+
+## v-for with Objects
+
+Iterate over an object's properties:
+
+```vue
+<template>
+  <ul>
+    <!-- Iterate over values -->
+    <li v-for="value in user" :key="value">
+      {{ value }}
+    </li>
+    
+    <!-- Iterate with key -->
+    <li v-for="(value, key) in user" :key="key">
+      {{ key }}: {{ value }}
+    </li>
+    
+    <!-- Iterate with key and index -->
+    <li v-for="(value, key, index) in user" :key="key">
+      {{ index }}. {{ key }}: {{ value }}
+    </li>
+  </ul>
+</template>
+
+<script setup>
+import { reactive } from 'vue'
+
+const user = reactive({
+  name: 'John Doe',
+  age: 30,
+  email: 'john@example.com'
+})
+</script>
+```
+
+## v-for with Range
+
+Iterate over a range of numbers:
+
+```vue
+<template>
+  <ul>
+    <li v-for="n in 10" :key="n">
+      {{ n }}
+    </li>
+  </ul>
+</template>
+```
+
+<Note>
+  When using a range, `n` starts from 1, not 0.
+</Note>
+
+## Key Attribute
+
+The `key` attribute helps Vue identify which items have changed, been added, or been removed:
+
+```vue
+<template>
+  <div>
+    <button @click="shuffle">Shuffle</button>
+    <ul>
+      <li v-for="item in items" :key="item.id">
+        {{ item.text }}
+      </li>
+    </ul>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const items = ref([
+  { id: 1, text: 'Item 1' },
+  { id: 2, text: 'Item 2' },
+  { id: 3, text: 'Item 3' }
+])
+
+function shuffle() {
+  items.value = items.value.sort(() => Math.random() - 0.5)
+}
+</script>
+```
+
+<Warning>
+  Always use a unique, stable `key` when using `v-for`. Don't use the index as the key if the list order can change, as this can lead to rendering issues and state bugs.
+</Warning>
+
+### Why Keys Matter
+
+<Steps>
+  <Step title="Without keys">
+    Vue reuses elements by position, which can cause issues when items are reordered, inserted, or removed.
+  </Step>
+
+  <Step title="With keys">
+    Vue can track each element's identity and efficiently reorder, update, or remove them as needed.
+  </Step>
+
+  <Step title="Performance">
+    Keys enable Vue's virtual DOM algorithm to perform minimal DOM operations when the list changes.
+  </Step>
+</Steps>
+
+## v-for on template
+
+Render multiple elements with `v-for` on `<template>`:
+
+```vue
+<template>
+  <ul>
+    <template v-for="item in items" :key="item.id">
+      <li class="item-title">{{ item.title }}</li>
+      <li class="item-description">{{ item.description }}</li>
+      <li class="divider"></li>
+    </template>
+  </ul>
+</template>
+```
+
+## Array Change Detection
+
+Vue can detect mutations on reactive arrays:
+
+### Mutation Methods
+
+These methods mutate the original array and trigger updates:
+
+```vue
+<script setup>
+import { ref } from 'vue'
+
+const items = ref([1, 2, 3, 4, 5])
+
+// All of these trigger reactivity
+items.value.push(6)
+items.value.pop()
+items.value.shift()
+items.value.unshift(0)
+items.value.splice(2, 1)
+items.value.sort()
+items.value.reverse()
+</script>
+```
+
+From `packages/reactivity/src/arrayInstrumentations.ts`, Vue intercepts these array methods to track dependencies and trigger updates.
+
+### Replacement Methods
+
+These methods return a new array:
+
+```vue
+<script setup>
+import { ref } from 'vue'
+
+const items = ref([1, 2, 3, 4, 5])
+
+// Replace the entire array
+items.value = items.value.filter(item => item > 2)
+items.value = items.value.map(item => item * 2)
+items.value = items.value.concat([6, 7, 8])
+items.value = items.value.slice(0, 3)
+</script>
+```
+
+<Tip>
+  Vue's reactivity system efficiently handles array replacements. You don't need to worry about performance - Vue will reuse existing elements where possible.
+</Tip>
+
+## Displaying Filtered/Sorted Results
+
+Use computed properties to display transformed data:
+
+<CodeGroup>
+```vue Filtering
+<template>
+  <ul>
+    <li v-for="item in activeItems" :key="item.id">
+      {{ item.text }}
+    </li>
+  </ul>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+
+const items = ref([
+  { id: 1, text: 'Item 1', active: true },
+  { id: 2, text: 'Item 2', active: false },
+  { id: 3, text: 'Item 3', active: true }
+])
+
+const activeItems = computed(() => 
+  items.value.filter(item => item.active)
+)
+</script>
+```
+
+```vue Sorting
+<template>
+  <ul>
+    <li v-for="item in sortedItems" :key="item.id">
+      {{ item.name }} - {{ item.score }}
+    </li>
+  </ul>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+
+const items = ref([
+  { id: 1, name: 'Alice', score: 95 },
+  { id: 2, name: 'Bob', score: 80 },
+  { id: 3, name: 'Charlie', score: 90 }
+])
+
+const sortedItems = computed(() => 
+  [...items.value].sort((a, b) => b.score - a.score)
+)
+</script>
+```
+
+```vue Search & Filter
+<template>
+  <div>
+    <input v-model="searchQuery" placeholder="Search..." />
+    <ul>
+      <li v-for="item in filteredItems" :key="item.id">
+        {{ item.name }}
+      </li>
+    </ul>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+
+const searchQuery = ref('')
+const items = ref([
+  { id: 1, name: 'Apple' },
+  { id: 2, name: 'Banana' },
+  { id: 3, name: 'Cherry' }
+])
+
+const filteredItems = computed(() => {
+  const query = searchQuery.value.toLowerCase()
+  return items.value.filter(item =>
+    item.name.toLowerCase().includes(query)
+  )
+})
+</script>
+```
+</CodeGroup>
+
+## Nested v-for
+
+Nest `v-for` directives for multi-dimensional data:
+
+```vue
+<template>
+  <div>
+    <div v-for="category in categories" :key="category.id">
+      <h2>{{ category.name }}</h2>
+      <ul>
+        <li v-for="item in category.items" :key="item.id">
+          {{ item.name }} - ${{ item.price }}
+        </li>
+      </ul>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const categories = ref([
+  {
+    id: 1,
+    name: 'Fruits',
+    items: [
+      { id: 1, name: 'Apple', price: 1.99 },
+      { id: 2, name: 'Banana', price: 0.99 }
+    ]
+  },
+  {
+    id: 2,
+    name: 'Vegetables',
+    items: [
+      { id: 3, name: 'Carrot', price: 0.79 },
+      { id: 4, name: 'Broccoli', price: 2.49 }
+    ]
+  }
+])
+</script>
+```
+
+## v-for with Components
+
+Use `v-for` with components:
+
+```vue
+<template>
+  <div>
+    <TodoItem
+      v-for="todo in todos"
+      :key="todo.id"
+      :title="todo.title"
+      :completed="todo.completed"
+      @toggle="toggleTodo(todo.id)"
+    />
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import TodoItem from './TodoItem.vue'
+
+const todos = ref([
+  { id: 1, title: 'Learn Vue', completed: false },
+  { id: 2, title: 'Build app', completed: false }
+])
+
+function toggleTodo(id) {
+  const todo = todos.value.find(t => t.id === id)
+  if (todo) {
+    todo.completed = !todo.completed
+  }
+}
+</script>
+```
+
+<Note>
+  When using `v-for` with components, the `key` attribute is required. It cannot be automatically inferred.
+</Note>
+
+## renderList Helper
+
+Internally, Vue uses the `renderList` helper from `packages/runtime-core/src/helpers/renderList.ts` to implement `v-for`:
+
+```typescript
+export function renderList(
+  source: any,
+  renderItem: (...args: any[]) => VNode
+): VNode[] {
+  let ret: VNode[]
+  
+  if (isArray(source) || isString(source)) {
+    ret = new Array(source.length)
+    for (let i = 0, l = source.length; i < l; i++) {
+      ret[i] = renderItem(source[i], i, undefined, undefined)
+    }
+  } else if (typeof source === 'number') {
+    ret = new Array(source)
+    for (let i = 0; i < source; i++) {
+      ret[i] = renderItem(i + 1, i, undefined, undefined)
+    }
+  } else if (isObject(source)) {
+    if (source[Symbol.iterator]) {
+      ret = Array.from(source as Iterable<any>, renderItem)
+    } else {
+      const keys = Object.keys(source)
+      ret = new Array(keys.length)
+      for (let i = 0, l = keys.length; i < l; i++) {
+        const key = keys[i]
+        ret[i] = renderItem(source[key], key, i, undefined)
+      }
+    }
+  } else {
+    ret = []
+  }
+  
+  return ret
+}
+```
+
+## Performance Considerations
+
+<Steps>
+  <Step title="Use computed for transformations">
+    Filter and sort data using computed properties rather than in the template.
+    
+    ```vue
+    <!-- Bad: Filtering in template -->
+    <li v-for="item in items.filter(i => i.active)" :key="item.id">
+    
+    <!-- Good: Filtering in computed -->
+    <li v-for="item in activeItems" :key="item.id">
+    ```
+  </Step>
+
+  <Step title="Avoid expensive operations in v-for">
+    Don't call functions that perform expensive operations inside v-for loops.
+    
+    ```vue
+    <!-- Bad: Expensive function called for each item -->
+    <li v-for="item in items" :key="item.id">
+      {{ expensiveFormat(item) }}
+    </li>
+    
+    <!-- Good: Pre-compute values -->
+    <li v-for="item in formattedItems" :key="item.id">
+      {{ item.formatted }}
+    </li>
+    ```
+  </Step>
+
+  <Step title="Use stable keys">
+    Always use unique, stable keys. Avoid using array indices as keys for dynamic lists.
+    
+    ```vue
+    <!-- Bad: Using index as key -->
+    <li v-for="(item, index) in items" :key="index">
+    
+    <!-- Good: Using stable ID -->
+    <li v-for="item in items" :key="item.id">
+    ```
+  </Step>
+</Steps>
+
+## Common Patterns
+
+### Pagination
+
+```vue
+<template>
+  <div>
+    <ul>
+      <li v-for="item in paginatedItems" :key="item.id">
+        {{ item.name }}
+      </li>
+    </ul>
+    
+    <button @click="prevPage" :disabled="currentPage === 1">
+      Previous
+    </button>
+    <span>Page {{ currentPage }} of {{ totalPages }}</span>
+    <button @click="nextPage" :disabled="currentPage === totalPages">
+      Next
+    </button>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+
+const items = ref(Array.from({ length: 100 }, (_, i) => ({
+  id: i + 1,
+  name: `Item ${i + 1}`
+})))
+
+const currentPage = ref(1)
+const pageSize = 10
+
+const totalPages = computed(() => 
+  Math.ceil(items.value.length / pageSize)
+)
+
+const paginatedItems = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  const end = start + pageSize
+  return items.value.slice(start, end)
+})
+
+function prevPage() {
+  if (currentPage.value > 1) currentPage.value--
+}
+
+function nextPage() {
+  if (currentPage.value < totalPages.value) currentPage.value++
+}
+</script>
+```
+
+### Grouping
+
+```vue
+<template>
+  <div>
+    <div v-for="(group, letter) in groupedItems" :key="letter">
+      <h3>{{ letter }}</h3>
+      <ul>
+        <li v-for="item in group" :key="item.id">
+          {{ item.name }}
+        </li>
+      </ul>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+
+const items = ref([
+  { id: 1, name: 'Apple' },
+  { id: 2, name: 'Apricot' },
+  { id: 3, name: 'Banana' },
+  { id: 4, name: 'Cherry' }
+])
+
+const groupedItems = computed(() => {
+  return items.value.reduce((groups, item) => {
+    const letter = item.name[0]
+    if (!groups[letter]) groups[letter] = []
+    groups[letter].push(item)
+    return groups
+  }, {})
+})
+</script>
+```
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Conditional Rendering" icon="code-branch" href="/essentials/conditional-rendering">
+    Control element rendering with v-if
+  </Card>
+  
+  <Card title="Computed Properties" icon="calculator" href="/essentials/computed-properties">
+    Transform data for rendering
+  </Card>
+  
+  <Card title="Reactivity Fundamentals" icon="bolt" href="/essentials/reactivity-fundamentals">
+    Learn about reactive arrays
+  </Card>
+</CardGroup>

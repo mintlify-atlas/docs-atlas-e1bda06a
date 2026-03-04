@@ -1,0 +1,417 @@
+---
+title: Reactivity API - Utilities
+description: Utility functions for working with reactive state in Vue.js
+---
+
+# Reactivity API: Utilities
+
+Utility functions for inspecting and working with reactive state.
+
+## isRef()
+
+Checks if a value is a ref object.
+
+<ParamField path="value" type="unknown" required>
+  The value to check.
+</ParamField>
+
+**Type:**
+```typescript
+function isRef<T>(r: Ref<T> | unknown): r is Ref<T>
+```
+
+**Returns:** `boolean` - `true` if the value is a ref, `false` otherwise
+
+**Example:**
+```javascript
+import { ref, isRef } from 'vue'
+
+const count = ref(0)
+const plain = 0
+
+console.log(isRef(count)) // true
+console.log(isRef(plain)) // false
+```
+
+**Details:**
+- Returns `true` for refs created by `ref()`, `shallowRef()`, `computed()`, or `customRef()`
+- Type guard function that narrows the type to `Ref<T>`
+
+---
+
+## unref()
+
+Returns the inner value if the argument is a ref, otherwise returns the argument itself. This is a sugar function for `val = isRef(val) ? val.value : val`.
+
+<ParamField path="ref" type="MaybeRef<T> | ComputedRef<T>" required>
+  A ref or plain value to be converted into the plain value.
+</ParamField>
+
+**Type:**
+```typescript
+function unref<T>(ref: MaybeRef<T> | ComputedRef<T>): T
+
+type MaybeRef<T = any> = T | Ref<T> | ShallowRef<T> | WritableComputedRef<T>
+```
+
+**Returns:** `T` - The unwrapped value
+
+**Example:**
+```javascript
+import { ref, unref } from 'vue'
+
+function useFoo(x: number | Ref<number>) {
+  const unwrapped = unref(x)
+  // unwrapped is guaranteed to be a number
+  return unwrapped * 2
+}
+
+useFoo(1) // 2
+useFoo(ref(1)) // 2
+```
+
+**Details:**
+- Useful for writing functions that accept both refs and plain values
+- If the value is a ref, returns `.value`
+- If the value is not a ref, returns the value as-is
+
+---
+
+## toRef()
+
+Used to normalize values / refs / getters into refs. Can also be used to create a ref for a property on a source reactive object.
+
+<ParamField path="source" type="T | object">
+  A getter function, an existing ref, a non-function value, or a reactive object.
+</ParamField>
+
+<ParamField path="key" type="K extends keyof T">
+  (Optional) The name of the property in the reactive object.
+</ParamField>
+
+<ParamField path="defaultValue" type="T[K]">
+  (Optional) Default value to use if the property is undefined.
+</ParamField>
+
+**Type:**
+```typescript
+// Normalize value/ref/getter to ref
+function toRef<T>(
+  value: T
+): T extends () => infer R
+  ? Readonly<Ref<R>>
+  : T extends Ref
+    ? T
+    : Ref<UnwrapRef<T>>
+
+// Create ref from reactive object property
+function toRef<T extends object, K extends keyof T>(
+  object: T,
+  key: K
+): ToRef<T[K]>
+
+function toRef<T extends object, K extends keyof T>(
+  object: T,
+  key: K,
+  defaultValue: T[K]
+): ToRef<Exclude<T[K], undefined>>
+```
+
+**Returns:** `Ref<T>` - A ref object
+
+**Example:**
+```javascript
+import { reactive, toRef } from 'vue'
+
+// returns existing refs as-is
+const existingRef = ref(1)
+toRef(existingRef) // returns existingRef
+
+// creates a ref that calls the getter on .value access
+toRef(() => props.foo)
+
+// creates normal refs from non-function values
+toRef(1) // equivalent to ref(1)
+```
+
+**Property refs:**
+```javascript
+const state = reactive({
+  foo: 1,
+  bar: 2
+})
+
+const fooRef = toRef(state, 'foo')
+
+// mutating the ref updates the original
+fooRef.value++
+console.log(state.foo) // 2
+
+// mutating the original also updates the ref
+state.foo++
+console.log(fooRef.value) // 3
+```
+
+**Details:**
+- Can normalize a value, ref, or getter function into a ref
+- When passed a reactive object and key, creates a ref that stays in sync with the object's property
+- The created ref is synced with its source property: mutating the source property updates the ref, and vice-versa
+- Useful for passing a single property of a reactive object to a composable while preserving reactivity
+
+**See also:**
+- [Guide - toRef](/essentials/reactivity-fundamentals#toref)
+
+---
+
+## toRefs()
+
+Converts a reactive object to a plain object where each property of the resulting object is a ref pointing to the corresponding property of the original object. Each individual ref is created using `toRef()`.
+
+<ParamField path="object" type="T extends object" required>
+  A reactive object to be converted into an object of refs.
+</ParamField>
+
+**Type:**
+```typescript
+function toRefs<T extends object>(object: T): ToRefs<T>
+
+type ToRefs<T = any> = {
+  [K in keyof T]: ToRef<T[K]>
+}
+```
+
+**Returns:** `ToRefs<T>` - A plain object with ref properties
+
+**Example:**
+```javascript
+import { reactive, toRefs } from 'vue'
+
+const state = reactive({
+  foo: 1,
+  bar: 2
+})
+
+const stateAsRefs = toRefs(state)
+
+// The ref and the original property are "linked"
+state.foo++
+console.log(stateAsRefs.foo.value) // 2
+
+stateAsRefs.foo.value++
+console.log(state.foo) // 3
+```
+
+**Useful when returning from composables:**
+```javascript
+function useFeature() {
+  const state = reactive({
+    foo: 1,
+    bar: 2
+  })
+
+  // return refs when returning
+  return toRefs(state)
+}
+
+// can destructure without losing reactivity
+const { foo, bar } = useFeature()
+```
+
+**Details:**
+- Useful when returning a reactive object from a composition function
+- Allows consuming components to destructure/spread the returned object without losing reactivity
+- Only converts enumerable properties on the source object
+- Each ref stays in sync with the corresponding property on the source object
+
+**See also:**
+- [Guide - toRefs](/essentials/reactivity-fundamentals#torefs)
+
+---
+
+## isProxy()
+
+Checks if an object is a proxy created by `reactive()`, `readonly()`, `shallowReactive()`, or `shallowReadonly()`.
+
+<ParamField path="value" type="any" required>
+  The value to check.
+</ParamField>
+
+**Type:**
+```typescript
+function isProxy(value: any): boolean
+```
+
+**Returns:** `boolean` - `true` if the value is a Vue reactive proxy, `false` otherwise
+
+**Example:**
+```javascript
+import { reactive, readonly, isProxy } from 'vue'
+
+const state = reactive({ count: 0 })
+console.log(isProxy(state)) // true
+
+const readonlyState = readonly(state)
+console.log(isProxy(readonlyState)) // true
+
+const plain = { count: 0 }
+console.log(isProxy(plain)) // false
+```
+
+---
+
+## isReactive()
+
+Checks if an object is a proxy created by `reactive()` or `shallowReactive()`.
+
+<ParamField path="value" type="unknown" required>
+  The value to check.
+</ParamField>
+
+**Type:**
+```typescript
+function isReactive(value: unknown): boolean
+```
+
+**Returns:** `boolean` - `true` if the value is a reactive proxy, `false` otherwise
+
+**Example:**
+```javascript
+import { reactive, readonly, isReactive, ref } from 'vue'
+
+isReactive(reactive({}))            // true
+isReactive(readonly(reactive({})))  // true
+isReactive(ref({}).value)           // true
+isReactive(readonly(ref({})).value) // true
+isReactive(ref(true))               // false
+isReactive(shallowRef({}).value)    // false
+isReactive(shallowReactive({}))     // true
+```
+
+**Details:**
+- Returns `true` even if the proxy is created by `readonly()`, but wraps a reactive proxy created by `reactive()`
+- Also returns `true` for proxies created by `shallowReactive()`
+
+---
+
+## isReadonly()
+
+Checks whether the passed value is a readonly object. The properties of a readonly object can change, but they can't be assigned directly via the passed object.
+
+<ParamField path="value" type="unknown" required>
+  The value to check.
+</ParamField>
+
+**Type:**
+```typescript
+function isReadonly(value: unknown): boolean
+```
+
+**Returns:** `boolean` - `true` if the value is readonly, `false` otherwise
+
+**Example:**
+```javascript
+import { readonly, isReadonly, computed } from 'vue'
+
+const original = { count: 0 }
+const wrapped = readonly(original)
+
+console.log(isReadonly(wrapped)) // true
+console.log(isReadonly(original)) // false
+
+// computed refs without a setter are readonly
+const computedRef = computed(() => 1)
+console.log(isReadonly(computedRef)) // true
+```
+
+**Details:**
+- The proxies created by `readonly()` and `shallowReadonly()` are both considered readonly
+- A computed ref without a set function is also considered readonly
+
+---
+
+## toRaw()
+
+Returns the raw, original object of a Vue-created proxy.
+
+<ParamField path="observed" type="T" required>
+  The proxy object for which the raw value is requested.
+</ParamField>
+
+**Type:**
+```typescript
+function toRaw<T>(observed: T): T
+```
+
+**Returns:** `T` - The original, non-proxy object
+
+**Example:**
+```javascript
+import { reactive, toRaw } from 'vue'
+
+const foo = {}
+const reactiveFoo = reactive(foo)
+
+console.log(toRaw(reactiveFoo) === foo) // true
+```
+
+**Details:**
+- `toRaw()` can return the original object from proxies created by `reactive()`, `readonly()`, `shallowReactive()`, or `shallowReadonly()`
+- This is an escape hatch that can be used to temporarily read without incurring proxy access/tracking overhead or write without triggering changes
+- It is not recommended to hold a persistent reference to the original object. Use with caution
+
+**See also:**
+- [Advanced - toRaw](/api/reactivity-advanced#integration-with-external-state-systems)
+
+---
+
+## markRaw()
+
+Marks an object so that it will never be converted to a proxy. Returns the object itself.
+
+<ParamField path="value" type="T extends object" required>
+  The object to be marked as "raw".
+</ParamField>
+
+**Type:**
+```typescript
+function markRaw<T extends object>(value: T): Raw<T>
+
+type Raw<T> = T & { [RawSymbol]?: true }
+```
+
+**Returns:** `Raw<T>` - The same object, marked to never be made reactive
+
+**Example:**
+```javascript
+import { reactive, markRaw, isReactive } from 'vue'
+
+const foo = markRaw({})
+console.log(isReactive(reactive(foo))) // false
+
+// also works when nested inside other reactive objects
+const bar = reactive({ foo })
+console.log(isReactive(bar.foo)) // false
+```
+
+**Use cases:**
+```javascript
+// External library objects that should not be made reactive
+const map = markRaw(new google.maps.Map(element, options))
+
+// Objects with complex internal state that would be expensive to track
+const hugeList = markRaw([
+  /* thousands of items */
+])
+```
+
+**Details:**
+- Useful for values that should never be made reactive, such as complex third-party class instances or Vue component objects
+- Used together with shallow APIs like `shallowReactive()` to selectively opt-out of deep reactive/readonly conversion
+- Allows embedding raw, non-proxied objects in your state graph
+
+**Warning:**
+- `markRaw()` and shallow APIs allow you to selectively opt-out of the default deep reactive/readonly conversion and embed raw, non-proxied objects in your state graph
+- However, they can be tricky to use. Consider flattening your data structure to avoid the need for them
+
+**See also:**
+- [Advanced - markRaw](/api/reactivity-advanced#integration-with-external-state-systems)

@@ -1,0 +1,403 @@
+---
+title: Application API
+description: API reference for Vue application instance creation and methods
+---
+
+## createApp()
+
+Creates an application instance.
+
+<ParamField path="rootComponent" type="Component" required>
+  The root component to mount. Can be a component options object or a component definition.
+</ParamField>
+
+<ParamField path="rootProps" type="Data | null" default="null">
+  Props to pass to the root component.
+</ParamField>
+
+<ResponseField name="return" type="App<Element>">
+  Returns an application instance.
+</ResponseField>
+
+```ts
+function createApp(rootComponent: Component, rootProps?: Data | null): App<Element>
+```
+
+**Example:**
+
+```js
+import { createApp } from 'vue'
+import App from './App.vue'
+
+const app = createApp(App)
+app.mount('#app')
+```
+
+**Example with root props:**
+
+```js
+const app = createApp(App, {
+  title: 'My App',
+  version: '1.0.0'
+})
+```
+
+---
+
+## createSSRApp()
+
+Creates an application instance in SSR hydration mode.
+
+<ParamField path="rootComponent" type="Component" required>
+  The root component to mount.
+</ParamField>
+
+<ParamField path="rootProps" type="Data | null" default="null">
+  Props to pass to the root component.
+</ParamField>
+
+<ResponseField name="return" type="App<Element>">
+  Returns an application instance configured for SSR hydration.
+</ResponseField>
+
+```ts
+function createSSRApp(rootComponent: Component, rootProps?: Data | null): App<Element>
+```
+
+**Example:**
+
+```js
+import { createSSRApp } from 'vue'
+import App from './App.vue'
+
+const app = createSSRApp(App)
+app.mount('#app') // hydrates server-rendered HTML
+```
+
+---
+
+## App Instance Methods
+
+### app.mount()
+
+Mounts the application instance in a container element.
+
+<ParamField path="rootContainer" type="Element | ShadowRoot | string" required>
+  Can be an actual DOM element or a CSS selector string.
+</ParamField>
+
+<ResponseField name="return" type="ComponentPublicInstance">
+  Returns the root component instance.
+</ResponseField>
+
+```ts
+mount(rootContainer: Element | ShadowRoot | string): ComponentPublicInstance
+```
+
+**Example:**
+
+```js
+app.mount('#app')
+// or
+app.mount(document.querySelector('#app'))
+```
+
+---
+
+### app.unmount()
+
+Unmounts the application instance.
+
+```ts
+unmount(): void
+```
+
+**Example:**
+
+```js
+app.unmount()
+```
+
+---
+
+### app.use()
+
+Installs a Vue plugin.
+
+<ParamField path="plugin" type="Plugin" required>
+  The plugin to install. Can be an object with an `install` method or a function.
+</ParamField>
+
+<ParamField path="options" type="any">
+  Optional options to pass to the plugin.
+</ParamField>
+
+<ResponseField name="return" type="App">
+  Returns the app instance for chaining.
+</ResponseField>
+
+```ts
+use<Options extends unknown[]>(plugin: Plugin<Options>, ...options: Options): this
+use<Options>(plugin: Plugin<Options>, options: Options): this
+```
+
+**Example:**
+
+```js
+import { createApp } from 'vue'
+import MyPlugin from './plugins/MyPlugin'
+
+const app = createApp(App)
+app.use(MyPlugin, { /* plugin options */ })
+```
+
+---
+
+### app.component()
+
+Registers or retrieves a global component.
+
+<ParamField path="name" type="string" required>
+  The component name.
+</ParamField>
+
+<ParamField path="component" type="Component">
+  The component definition. If omitted, retrieves the registered component.
+</ParamField>
+
+<ResponseField name="return" type="Component | undefined | this">
+  Returns the component if retrieving, or the app instance if registering.
+</ResponseField>
+
+```ts
+component(name: string): Component | undefined
+component(name: string, component: Component): this
+```
+
+**Example:**
+
+```js
+// Register
+app.component('MyComponent', {
+  /* component definition */
+})
+
+// Retrieve
+const MyComponent = app.component('MyComponent')
+```
+
+---
+
+### app.directive()
+
+Registers or retrieves a global custom directive.
+
+<ParamField path="name" type="string" required>
+  The directive name (without `v-` prefix).
+</ParamField>
+
+<ParamField path="directive" type="Directive">
+  The directive definition. If omitted, retrieves the registered directive.
+</ParamField>
+
+<ResponseField name="return" type="Directive | undefined | this">
+  Returns the directive if retrieving, or the app instance if registering.
+</ResponseField>
+
+```ts
+directive(name: string): Directive | undefined
+directive(name: string, directive: Directive): this
+```
+
+**Example:**
+
+```js
+// Register
+app.directive('focus', {
+  mounted(el) {
+    el.focus()
+  }
+})
+
+// Retrieve
+const focusDirective = app.directive('focus')
+```
+
+---
+
+### app.mixin()
+
+Applies a global mixin.
+
+<ParamField path="mixin" type="ComponentOptions" required>
+  The mixin object to apply.
+</ParamField>
+
+<ResponseField name="return" type="App">
+  Returns the app instance for chaining.
+</ResponseField>
+
+```ts
+mixin(mixin: ComponentOptions): this
+```
+
+**Example:**
+
+```js
+app.mixin({
+  created() {
+    console.log('Global mixin created hook')
+  }
+})
+```
+
+<Warning>
+  Global mixins should be used sparingly as they affect every component. Consider using composables or plugins instead.
+</Warning>
+
+---
+
+### app.provide()
+
+Provides a value that can be injected in all descendant components.
+
+<ParamField path="key" type="InjectionKey<T> | string | number" required>
+  The injection key.
+</ParamField>
+
+<ParamField path="value" type="T" required>
+  The value to provide.
+</ParamField>
+
+<ResponseField name="return" type="App">
+  Returns the app instance for chaining.
+</ResponseField>
+
+```ts
+provide<T, K = InjectionKey<T> | string | number>(
+  key: K,
+  value: K extends InjectionKey<infer V> ? V : T
+): this
+```
+
+**Example:**
+
+```js
+import { createApp } from 'vue'
+
+const app = createApp(App)
+app.provide('message', 'Hello from app!')
+```
+
+**Using in a component:**
+
+```js
+import { inject } from 'vue'
+
+export default {
+  setup() {
+    const message = inject('message')
+    console.log(message) // 'Hello from app!'
+  }
+}
+```
+
+---
+
+### app.runWithContext()
+
+Executes a function with the app as the active instance.
+
+<ParamField path="fn" type="() => T" required>
+  The function to execute.
+</ParamField>
+
+<ResponseField name="return" type="T">
+  Returns the result of the function.
+</ResponseField>
+
+```ts
+runWithContext<T>(fn: () => T): T
+```
+
+**Example:**
+
+```js
+app.provide('key', 'value')
+
+app.runWithContext(() => {
+  const value = inject('key')
+  console.log(value) // 'value'
+})
+```
+
+---
+
+### app.onUnmount()
+
+Registers a callback to be called when the app is unmounted.
+
+<ParamField path="cb" type="() => void" required>
+  The cleanup callback function.
+</ParamField>
+
+```ts
+onUnmount(cb: () => void): void
+```
+
+**Example:**
+
+```js
+app.onUnmount(() => {
+  console.log('App is being unmounted')
+  // Perform cleanup
+})
+```
+
+---
+
+## App Instance Properties
+
+### app.version
+
+The version of Vue the app is using.
+
+```ts
+app.version: string
+```
+
+**Example:**
+
+```js
+console.log(app.version) // '3.5.0'
+```
+
+---
+
+### app.config
+
+The application configuration object.
+
+```ts
+app.config: AppConfig
+```
+
+**Example:**
+
+```js
+app.config.errorHandler = (err, instance, info) => {
+  console.error('Error:', err)
+}
+
+app.config.globalProperties.$http = axios
+```
+
+**AppConfig Properties:**
+
+- `errorHandler`: Global error handler
+- `warnHandler`: Global warning handler (dev only)
+- `globalProperties`: Add properties available to all component instances
+- `optionMergeStrategies`: Custom merge strategies for component options
+- `performance`: Enable performance tracking (dev only)
+- `compilerOptions`: Configure runtime compiler
+- `idPrefix`: Prefix for all `useId()` calls within this app

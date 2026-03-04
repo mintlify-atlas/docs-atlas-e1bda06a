@@ -1,0 +1,408 @@
+---
+title: Composables
+description: Learn how to create and use composables in Vue.js to extract and reuse stateful logic across components.
+---
+
+# Composables
+
+Composables are reusable functions that leverage Vue's Composition API to encapsulate and reuse stateful logic. They are the composition API equivalent of mixins in the Options API, but with better type inference and more flexible composition patterns.
+
+## What is a Composable?
+
+A composable is a function that uses Vue's reactive APIs (ref, reactive, computed, watch) to manage state and side effects. Composables typically:
+
+- Start with the prefix `use` (e.g., `useMouse`, `useFetch`)
+- Return reactive state and/or methods
+- Can be composed together to build complex functionality
+- Are reusable across multiple components
+
+## Basic Example
+
+Here's a simple composable that tracks mouse position:
+
+```javascript
+import { ref, onMounted, onUnmounted } from 'vue'
+
+export function useMouse() {
+  const x = ref(0)
+  const y = ref(0)
+
+  function update(event) {
+    x.value = event.pageX
+    y.value = event.pageY
+  }
+
+  onMounted(() => window.addEventListener('mousemove', update))
+  onUnmounted(() => window.removeEventListener('mousemove', update))
+
+  return { x, y }
+}
+```
+
+Usage in a component:
+
+```vue
+<script setup>
+import { useMouse } from './composables/useMouse'
+
+const { x, y } = useMouse()
+</script>
+
+<template>
+  <div>Mouse position: {{ x }}, {{ y }}</div>
+</template>
+```
+
+## Reactive State with ref and reactive
+
+Composables use Vue's reactivity APIs to create reactive state:
+
+### Using ref
+
+`ref` creates a reactive reference to a value. It's ideal for primitive values and single objects:
+
+```javascript
+import { ref } from 'vue'
+
+export function useCounter(initialValue = 0) {
+  const count = ref(initialValue)
+  
+  function increment() {
+    count.value++
+  }
+  
+  function decrement() {
+    count.value--
+  }
+  
+  return { count, increment, decrement }
+}
+```
+
+### Using reactive
+
+`reactive` creates a reactive proxy of an object, deeply converting all nested properties:
+
+```javascript
+import { reactive, toRefs } from 'vue'
+
+export function useForm() {
+  const state = reactive({
+    username: '',
+    email: '',
+    errors: {}
+  })
+  
+  function validate() {
+    state.errors = {}
+    if (!state.username) {
+      state.errors.username = 'Username is required'
+    }
+    if (!state.email.includes('@')) {
+      state.errors.email = 'Invalid email'
+    }
+    return Object.keys(state.errors).length === 0
+  }
+  
+  // Return refs for destructuring
+  return {
+    ...toRefs(state),
+    validate
+  }
+}
+```
+
+## Computed Values
+
+Use `computed` to create derived state that automatically updates:
+
+```javascript
+import { ref, computed } from 'vue'
+
+export function useSearch(items) {
+  const query = ref('')
+  
+  const filteredItems = computed(() => {
+    if (!query.value) return items.value
+    return items.value.filter(item => 
+      item.toLowerCase().includes(query.value.toLowerCase())
+    )
+  })
+  
+  const resultCount = computed(() => filteredItems.value.length)
+  
+  return { query, filteredItems, resultCount }
+}
+```
+
+## Watchers
+
+Composables can use `watch` to react to state changes:
+
+### watch
+
+Watch one or more reactive sources and execute a callback when they change:
+
+```javascript
+import { ref, watch } from 'vue'
+
+export function useLocalStorage(key, initialValue) {
+  const data = ref(initialValue)
+  
+  // Load from localStorage on initialization
+  const stored = localStorage.getItem(key)
+  if (stored) {
+    data.value = JSON.parse(stored)
+  }
+  
+  // Watch for changes and sync to localStorage
+  watch(data, (newValue) => {
+    localStorage.setItem(key, JSON.stringify(newValue))
+  }, { deep: true })
+  
+  return data
+}
+```
+
+### watchEffect
+
+Automatically track reactive dependencies and re-run:
+
+```javascript
+import { ref, watchEffect } from 'vue'
+
+export function useTitle(title) {
+  watchEffect(() => {
+    document.title = title.value
+  })
+}
+```
+
+### Watch Options
+
+Based on `runtime-core/src/apiWatch.ts`, watchers support several options:
+
+- **immediate**: Execute callback immediately with current value
+- **deep**: Deep watch nested properties (number or boolean)
+- **flush**: Control timing - `'pre'`, `'post'`, or `'sync'`
+- **once**: Run the watcher only once
+
+```javascript
+import { watch } from 'vue'
+
+export function useDebounced(source, delay = 300) {
+  const debounced = ref(source.value)
+  let timeout
+  
+  watch(source, (newValue) => {
+    clearTimeout(timeout)
+    timeout = setTimeout(() => {
+      debounced.value = newValue
+    }, delay)
+  }, { immediate: true })
+  
+  return debounced
+}
+```
+
+## Async Composables
+
+Composables can handle async operations:
+
+```javascript
+import { ref } from 'vue'
+
+export function useFetch(url) {
+  const data = ref(null)
+  const error = ref(null)
+  const loading = ref(false)
+  
+  async function fetch() {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await fetch(url.value)
+      data.value = await response.json()
+    } catch (e) {
+      error.value = e
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  // Fetch on mount
+  fetch()
+  
+  // Watch URL changes
+  watch(url, fetch)
+  
+  return { data, error, loading, refetch: fetch }
+}
+```
+
+## Composable Composition
+
+Composables can use other composables:
+
+```javascript
+import { ref, computed } from 'vue'
+import { useFetch } from './useFetch'
+import { useLocalStorage } from './useLocalStorage'
+
+export function useUserProfile(userId) {
+  const url = computed(() => `/api/users/${userId.value}`)
+  const { data, error, loading } = useFetch(url)
+  
+  // Cache user preferences locally
+  const preferences = useLocalStorage('user-preferences', {})
+  
+  const profile = computed(() => ({
+    ...data.value,
+    preferences: preferences.value
+  }))
+  
+  return { profile, error, loading, preferences }
+}
+```
+
+## Best Practices
+
+### 1. Return Reactive State
+
+Always return reactive values from composables:
+
+```javascript
+// Good
+export function useCounter() {
+  const count = ref(0)
+  return { count }
+}
+
+// Bad - returns plain value
+export function useCounter() {
+  let count = 0
+  return { count }
+}
+```
+
+### 2. Use Consistent Naming
+
+Prefix composables with `use` and use descriptive names:
+
+```javascript
+// Good
+useMouse()
+useLocalStorage()
+useFetch()
+
+// Less clear
+mouseTracker()
+storeData()
+getData()
+```
+
+### 3. Accept Refs as Arguments
+
+Accept both refs and raw values for flexibility:
+
+```javascript
+import { unref, ref, watch } from 'vue'
+
+export function useFetch(url) {
+  const data = ref(null)
+  
+  async function doFetch() {
+    // unref() works with both refs and plain values
+    const response = await fetch(unref(url))
+    data.value = await response.json()
+  }
+  
+  // Watch if it's a ref
+  if (isRef(url)) {
+    watch(url, doFetch, { immediate: true })
+  } else {
+    doFetch()
+  }
+  
+  return { data }
+}
+```
+
+### 4. Cleanup Side Effects
+
+Always cleanup side effects in `onUnmounted`:
+
+```javascript
+import { onMounted, onUnmounted } from 'vue'
+
+export function useEventListener(target, event, handler) {
+  onMounted(() => target.addEventListener(event, handler))
+  onUnmounted(() => target.removeEventListener(event, handler))
+}
+```
+
+### 5. Return Values vs Refs
+
+Be consistent about what you return:
+
+```javascript
+// Pattern 1: Return object of refs (most common)
+export function useMouse() {
+  const x = ref(0)
+  const y = ref(0)
+  return { x, y }
+}
+
+// Pattern 2: Return refs from reactive using toRefs
+export function useForm() {
+  const state = reactive({ name: '', email: '' })
+  return toRefs(state)
+}
+```
+
+## SSR Considerations
+
+Be careful with side effects in SSR environments:
+
+```javascript
+import { ref, onMounted } from 'vue'
+
+export function useBrowserAPI() {
+  const data = ref(null)
+  
+  // Only run in browser
+  onMounted(() => {
+    data.value = window.localStorage.getItem('key')
+  })
+  
+  return { data }
+}
+```
+
+## TypeScript Support
+
+Composables work great with TypeScript:
+
+```typescript
+import { ref, Ref } from 'vue'
+
+export function useCounter(initialValue: number = 0): {
+  count: Ref<number>
+  increment: () => void
+  decrement: () => void
+} {
+  const count = ref(initialValue)
+  
+  const increment = () => count.value++
+  const decrement = () => count.value--
+  
+  return { count, increment, decrement }
+}
+```
+
+## Related
+
+- [Custom Directives](/reusability/custom-directives)
+- [Plugins](/reusability/plugins)
+- [Reactivity Fundamentals](/essentials/reactivity-fundamentals)

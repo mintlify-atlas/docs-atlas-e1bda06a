@@ -1,0 +1,408 @@
+---
+title: Props
+description: Learn about component props declaration, validation, and type inference in Vue.js
+---
+
+## Overview
+
+Props are custom attributes you can register on a component. They enable parent components to pass data down to child components.
+
+## Basic Usage
+
+### With `<script setup>`
+
+#### Array Syntax
+
+```vue
+<script setup>
+const props = defineProps(['foo', 'bar'])
+
+console.log(props.foo)
+</script>
+```
+
+#### Object Syntax
+
+```vue
+<script setup>
+const props = defineProps({
+  foo: String,
+  bar: {
+    type: Number,
+    required: true
+  }
+})
+</script>
+```
+
+Source: `runtime-core/src/apiSetupHelpers.ts:48-59`
+
+### Without `<script setup>`
+
+```js
+export default {
+  props: {
+    title: String,
+    likes: Number
+  },
+  setup(props) {
+    console.log(props.title)
+  }
+}
+```
+
+## Type-Based Props Declaration
+
+With TypeScript, you can declare props using pure types:
+
+```vue
+<script setup lang="ts">
+interface Props {
+  foo?: string
+  bar: number
+}
+
+const props = defineProps<Props>()
+</script>
+```
+
+Source: `runtime-core/src/apiSetupHelpers.ts:83-87`
+
+### With Default Values
+
+Use `withDefaults()` to provide defaults for type-based props:
+
+```vue
+<script setup lang="ts">
+interface Props {
+  size?: number
+  labels?: string[]
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  size: 3,
+  labels: () => ['default label']
+})
+</script>
+```
+
+Source: `runtime-core/src/apiSetupHelpers.ts:364-378`
+
+## Prop Types
+
+### Basic Type Constructors
+
+```js
+defineProps({
+  title: String,
+  likes: Number,
+  isPublished: Boolean,
+  commentIds: Array,
+  author: Object,
+  callback: Function,
+  contactsPromise: Promise
+})
+```
+
+### Multiple Types
+
+```js
+defineProps({
+  id: [String, Number],
+  value: [String, Object]
+})
+```
+
+Source: `runtime-core/src/componentProps.ts:70`
+
+## Prop Validation
+
+### PropOptions Interface
+
+```ts
+interface PropOptions<T = any, D = T> {
+  type?: PropType<T> | true | null
+  required?: boolean
+  default?: D | DefaultFactory<D> | null | undefined
+  validator?(value: unknown, props: Data): boolean
+}
+```
+
+Source: `runtime-core/src/componentProps.ts:55-68`
+
+### Validation Examples
+
+```js
+defineProps({
+  // Required string
+  title: {
+    type: String,
+    required: true
+  },
+  
+  // Number with default
+  likes: {
+    type: Number,
+    default: 0
+  },
+  
+  // Object/Array default must use factory function
+  propE: {
+    type: Object,
+    default: () => ({ message: 'hello' })
+  },
+  
+  // Custom validator
+  propF: {
+    validator(value) {
+      return ['success', 'warning', 'danger'].includes(value)
+    }
+  },
+  
+  // Function with default
+  propG: {
+    type: Function,
+    default: () => {
+      // default function
+    }
+  }
+})
+```
+
+## Type Inference
+
+### ExtractPropTypes
+
+Extract prop types from runtime declarations:
+
+```ts
+import type { ExtractPropTypes } from 'vue'
+
+const propsOptions = {
+  foo: String,
+  bar: {
+    type: Number,
+    required: true
+  }
+} as const
+
+type Props = ExtractPropTypes<typeof propsOptions>
+// { foo?: string; bar: number }
+```
+
+Source: `runtime-core/src/componentProps.ts:143-150`
+
+### DefineProps Type
+
+```ts
+export type DefineProps<T, BKeys extends keyof T> = Readonly<T> & {
+  readonly [K in BKeys]-?: boolean
+}
+```
+
+Source: `runtime-core/src/apiSetupHelpers.ts:96-98`
+
+## Prop Casing
+
+Vue automatically converts between camelCase and kebab-case:
+
+```vue
+<!-- Parent: kebab-case in template -->
+<MyComponent greeting-message="hello" />
+```
+
+```vue
+<!-- Child: camelCase in script -->
+<script setup>
+defineProps({
+  greetingMessage: String
+})
+</script>
+```
+
+## Boolean Props
+
+Boolean props have special casting behavior:
+
+```vue
+<!-- equivalent to passing :disabled="true" -->
+<MyComponent disabled />
+
+<!-- equivalent to passing :disabled="false" -->
+<MyComponent />
+```
+
+```js
+defineProps({
+  disabled: Boolean
+})
+```
+
+With multiple types:
+
+```js
+defineProps({
+  disabled: [Boolean, Number]
+})
+```
+
+## Props Destructuring
+
+Destructuring props in `<script setup>` maintains reactivity:
+
+```vue
+<script setup>
+const { foo, bar } = defineProps(['foo', 'bar'])
+
+watchEffect(() => {
+  // Re-runs when props change
+  console.log(foo, bar)
+})
+</script>
+```
+
+### Rest Properties
+
+The compiler creates a proxy for rest properties:
+
+```vue
+<script setup>
+const { foo, ...rest } = defineProps(['foo', 'bar', 'baz'])
+// rest = { bar, baz }
+</script>
+```
+
+Source: `runtime-core/src/apiSetupHelpers.ts:473-487`
+
+## Runtime Validation
+
+Prop validation runs in development mode:
+
+```js
+defineProps({
+  age: {
+    type: Number,
+    validator(value) {
+      return value >= 0
+    }
+  }
+})
+```
+
+Warnings appear in console if validation fails, but the component still renders.
+
+## Advanced Patterns
+
+### Complex Type Validation
+
+```ts
+import type { PropType } from 'vue'
+
+interface Book {
+  title: string
+  author: string
+  year: number
+}
+
+defineProps({
+  book: Object as PropType<Book>
+})
+```
+
+### Optional Props with Union Types
+
+```ts
+interface Props {
+  status?: 'draft' | 'published' | 'archived'
+}
+
+const props = defineProps<Props>()
+```
+
+### Generic Props
+
+```ts
+interface Props<T = any> {
+  items: T[]
+  renderItem: (item: T) => VNode
+}
+
+defineProps<Props<User>>()
+```
+
+## Prop Mutability
+
+Props are readonly and should not be mutated:
+
+```vue
+<script setup>
+const props = defineProps(['foo'])
+
+// ❌ Warning: props are readonly
+props.foo = 'bar'
+</script>
+```
+
+To modify prop values:
+
+1. **Use computed properties** for transformations:
+```js
+const formattedSize = computed(() => props.size.trim().toLowerCase())
+```
+
+2. **Emit events** to request parent updates:
+```js
+const emit = defineEmits(['update:modelValue'])
+emit('update:modelValue', newValue)
+```
+
+3. **Use local state** for local modifications:
+```js
+const localValue = ref(props.initialValue)
+```
+
+## Prop Type Definitions
+
+### PropType
+
+```ts
+export type PropType<T> = PropConstructor<T> | (PropConstructor<T> | null)[]
+
+type PropConstructor<T = any> =
+  | { new (...args: any[]): T & {} }
+  | { (): T }
+  | PropMethod<T>
+```
+
+Source: `runtime-core/src/componentProps.ts:70-81`
+
+### Component Props Options
+
+```ts
+export type ComponentPropsOptions<P = Data> =
+  | ComponentObjectPropsOptions<P>
+  | string[]
+
+export type ComponentObjectPropsOptions<P = Data> = {
+  [K in keyof P]: Prop<P[K]> | null
+}
+```
+
+Source: `runtime-core/src/componentProps.ts:43-49`
+
+## Best Practices
+
+1. **Always specify prop types** for better validation and documentation
+2. **Use type-based declarations** with TypeScript for compile-time safety
+3. **Provide defaults** for optional props to avoid undefined checks
+4. **Mark required props** explicitly with `required: true`
+5. **Use validators** for complex validation logic
+6. **Never mutate props** - use events or local state instead
+7. **Use factory functions** for object/array defaults
+8. **Leverage destructuring** in `<script setup>` for cleaner code
+
+## Related APIs
+
+- [Events](/components/events) - Learn about emitting events from child components
+- [v-model](/components/v-model) - Learn about two-way binding with props
+- [defineModel](/components/define-model) - Learn about the model helper

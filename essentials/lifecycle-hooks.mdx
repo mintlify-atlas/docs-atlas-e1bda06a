@@ -1,0 +1,621 @@
+---
+title: Lifecycle Hooks
+description: Learn about Vue component lifecycle hooks and when to use them for executing code at specific stages.
+---
+
+Lifecycle hooks allow you to execute code at specific stages of a component's lifecycle.
+
+## Lifecycle Diagram
+
+Every Vue component instance goes through a series of initialization steps. During these steps, lifecycle hooks are called, allowing you to add your own code.
+
+<Steps>
+  <Step title="Creation">
+    Component is created and data is made reactive
+  </Step>
+  
+  <Step title="Mounting">
+    Component is inserted into the DOM
+  </Step>
+  
+  <Step title="Updating">
+    Component re-renders when reactive data changes
+  </Step>
+  
+  <Step title="Unmounting">
+    Component is removed from the DOM
+  </Step>
+</Steps>
+
+## Hook Registration
+
+From `packages/runtime-core/src/apiLifecycle.ts:66-79`, lifecycle hooks are registered using the `createHook` helper:
+
+```typescript
+const createHook =
+  <T extends Function = () => any>(lifecycle: LifecycleHooks) =>
+  (
+    hook: T,
+    target: ComponentInternalInstance | null = currentInstance
+  ): void => {
+    if (
+      !isInSSRComponentSetup ||
+      lifecycle === LifecycleHooks.SERVER_PREFETCH
+    ) {
+      injectHook(lifecycle, (...args: unknown[]) => hook(...args), target)
+    }
+  }
+```
+
+## onBeforeMount
+
+From `packages/runtime-core/src/apiLifecycle.ts:85`, called right before the component is mounted:
+
+```vue
+<script setup>
+import { ref, onBeforeMount } from 'vue'
+
+const data = ref(null)
+
+onBeforeMount(() => {
+  console.log('Component is about to mount')
+  // Component is not yet in the DOM
+  // Refs are not yet available
+})
+</script>
+```
+
+<Note>
+  At this stage, the component has finished setting up its reactive state, but no DOM nodes have been created yet.
+</Note>
+
+## onMounted
+
+From `packages/runtime-core/src/apiLifecycle.ts:86`, called after the component is mounted:
+
+```vue
+<template>
+  <div ref="el">Hello</div>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+
+const el = ref(null)
+
+onMounted(() => {
+  console.log('Component is mounted')
+  console.log(el.value) // Access DOM element
+  
+  // Good time for:
+  // - DOM manipulations
+  // - Integrating third-party libraries
+  // - Fetching data
+  // - Setting up event listeners
+})
+</script>
+```
+
+<Tip>
+  `onMounted` is the most commonly used lifecycle hook. Use it to access DOM elements, start timers, or make API calls.
+</Tip>
+
+## onBeforeUpdate
+
+From `packages/runtime-core/src/apiLifecycle.ts:87-89`, called before the component re-renders:
+
+```vue
+<script setup>
+import { ref, onBeforeUpdate } from 'vue'
+
+const count = ref(0)
+
+onBeforeUpdate(() => {
+  console.log('Before update:', count.value)
+  // Access state before it's applied to the DOM
+})
+</script>
+```
+
+<Warning>
+  Don't mutate component state in `onBeforeUpdate` as it can cause infinite update loops.
+</Warning>
+
+## onUpdated
+
+From `packages/runtime-core/src/apiLifecycle.ts:90`, called after the component has updated its DOM tree:
+
+```vue
+<template>
+  <div ref="el">{{ count }}</div>
+  <button @click="count++">Increment</button>
+</template>
+
+<script setup>
+import { ref, onUpdated } from 'vue'
+
+const count = ref(0)
+const el = ref(null)
+
+onUpdated(() => {
+  console.log('Component updated')
+  console.log('DOM content:', el.value.textContent)
+  // DOM has been updated
+})
+</script>
+```
+
+<Note>
+  `onUpdated` is called after any DOM update, which can be triggered by different state changes. Use a watcher if you need to react to specific state changes.
+</Note>
+
+## onBeforeUnmount
+
+From `packages/runtime-core/src/apiLifecycle.ts:91-93`, called before the component is unmounted:
+
+```vue
+<script setup>
+import { onMounted, onBeforeUnmount } from 'vue'
+
+let interval = null
+
+onMounted(() => {
+  interval = setInterval(() => {
+    console.log('Tick')
+  }, 1000)
+})
+
+onBeforeUnmount(() => {
+  console.log('Component is about to be unmounted')
+  // Component is still fully functional
+  if (interval) {
+    clearInterval(interval)
+  }
+})
+</script>
+```
+
+## onUnmounted
+
+From `packages/runtime-core/src/apiLifecycle.ts:94`, called after the component is unmounted:
+
+```vue
+<script setup>
+import { onUnmounted } from 'vue'
+
+onUnmounted(() => {
+  console.log('Component has been unmounted')
+  // Cleanup:
+  // - Remove event listeners
+  // - Cancel timers
+  // - Cancel pending requests
+  // - Unsubscribe from stores
+})
+</script>
+```
+
+<Tip>
+  **Cleanup pattern:**
+  ```typescript
+  onMounted(() => {
+    const cleanup = setupSomething()
+    onUnmounted(cleanup)
+  })
+  ```
+</Tip>
+
+## onErrorCaptured
+
+From `packages/runtime-core/src/apiLifecycle.ts:111-116`, captures errors from descendant components:
+
+```vue
+<script setup>
+import { onErrorCaptured } from 'vue'
+
+onErrorCaptured((err, instance, info) => {
+  console.error('Error captured:', err)
+  console.log('Component instance:', instance)
+  console.log('Error info:', info)
+  
+  // Return false to prevent error from propagating further
+  return false
+})
+</script>
+```
+
+### Error Captured Hook Signature
+
+<ParamField path="err" type="Error">
+  The error object that was thrown
+</ParamField>
+
+<ParamField path="instance" type="ComponentPublicInstance | null">
+  The component instance that threw the error
+</ParamField>
+
+<ParamField path="info" type="string">
+  A string containing information on where the error was captured (e.g., "render function", "event handler")
+</ParamField>
+
+<ParamField path="return" type="boolean | void">
+  Return `false` to prevent the error from propagating further
+</ParamField>
+
+## onRenderTracked
+
+From `packages/runtime-core/src/apiLifecycle.ts:100-101`, called when a reactive dependency is tracked during render:
+
+```vue
+<script setup>
+import { ref, onRenderTracked } from 'vue'
+
+const count = ref(0)
+
+onRenderTracked((event) => {
+  console.log('Tracked:', event)
+  // {
+  //   target: reactive object,
+  //   type: 'get',
+  //   key: property key
+  // }
+})
+</script>
+```
+
+<Note>
+  `onRenderTracked` is a debugging hook that only works in development mode.
+</Note>
+
+## onRenderTriggered
+
+From `packages/runtime-core/src/apiLifecycle.ts:102-103`, called when a reactive dependency triggers a re-render:
+
+```vue
+<script setup>
+import { ref, onRenderTriggered } from 'vue'
+
+const count = ref(0)
+
+onRenderTriggered((event) => {
+  console.log('Triggered:', event)
+  // {
+  //   target: reactive object,
+  //   type: 'set',
+  //   key: property key,
+  //   newValue: new value,
+  //   oldValue: old value
+  // }
+})
+</script>
+```
+
+## onServerPrefetch
+
+From `packages/runtime-core/src/apiLifecycle.ts:95-97`, called during server-side rendering:
+
+```vue
+<script setup>
+import { ref, onServerPrefetch } from 'vue'
+
+const data = ref(null)
+
+onServerPrefetch(async () => {
+  // Fetch data on the server
+  data.value = await fetchData()
+})
+</script>
+```
+
+<Note>
+  `onServerPrefetch` is only called during SSR. It allows you to fetch data on the server before rendering.
+</Note>
+
+## onActivated & onDeactivated
+
+From `packages/runtime-core/src/components/KeepAlive.ts`, used with `<KeepAlive>` components:
+
+```vue
+<script setup>
+import { onActivated, onDeactivated } from 'vue'
+
+onActivated(() => {
+  console.log('Component activated')
+  // Called when component is re-activated from cache
+})
+
+onDeactivated(() => {
+  console.log('Component deactivated')
+  // Called when component is cached by <KeepAlive>
+})
+</script>
+```
+
+## Lifecycle Hook Implementation
+
+From `packages/runtime-core/src/apiLifecycle.ts:20-64`, the `injectHook` function registers hooks:
+
+```typescript
+export function injectHook(
+  type: LifecycleHooks,
+  hook: Function & { __weh?: Function },
+  target: ComponentInternalInstance | null = currentInstance,
+  prepend: boolean = false
+): Function | undefined {
+  if (target) {
+    const hooks = target[type] || (target[type] = [])
+    
+    // Wrap hook with error handling
+    const wrappedHook =
+      hook.__weh ||
+      (hook.__weh = (...args: unknown[]) => {
+        // Disable tracking inside lifecycle hooks
+        pauseTracking()
+        // Set currentInstance during hook invocation
+        const reset = setCurrentInstance(target)
+        const res = callWithAsyncErrorHandling(hook, target, type, args)
+        reset()
+        resetTracking()
+        return res
+      })
+    
+    if (prepend) {
+      hooks.unshift(wrappedHook)
+    } else {
+      hooks.push(wrappedHook)
+    }
+    return wrappedHook
+  } else if (__DEV__) {
+    const apiName = toHandlerKey(ErrorTypeStrings[type].replace(/ hook$/, ''))
+    warn(
+      `${apiName} is called when there is no active component instance to be ` +
+        `associated with. Lifecycle injection APIs can only be used during ` +
+        `execution of setup().`
+    )
+  }
+}
+```
+
+## Complete Lifecycle Example
+
+```vue
+<template>
+  <div ref="root">
+    <h1>{{ title }}</h1>
+    <p>Count: {{ count }}</p>
+    <button @click="count++">Increment</button>
+  </div>
+</template>
+
+<script setup>
+import {
+  ref,
+  onBeforeMount,
+  onMounted,
+  onBeforeUpdate,
+  onUpdated,
+  onBeforeUnmount,
+  onUnmounted
+} from 'vue'
+
+const title = ref('Lifecycle Demo')
+const count = ref(0)
+const root = ref(null)
+
+// Before mount
+onBeforeMount(() => {
+  console.log('1. Before Mount')
+  console.log('   - Reactive state is ready')
+  console.log('   - DOM not yet created')
+})
+
+// Mounted
+onMounted(() => {
+  console.log('2. Mounted')
+  console.log('   - Component in DOM')
+  console.log('   - Can access refs:', root.value)
+  
+  // Setup: timers, event listeners, etc.
+  const timer = setInterval(() => {
+    console.log('Timer tick')
+  }, 5000)
+  
+  // Cleanup on unmount
+  onUnmounted(() => {
+    clearInterval(timer)
+  })
+})
+
+// Before update
+onBeforeUpdate(() => {
+  console.log('3. Before Update')
+  console.log('   - State changed but DOM not yet updated')
+  console.log('   - Current count:', count.value)
+})
+
+// Updated
+onUpdated(() => {
+  console.log('4. Updated')
+  console.log('   - DOM has been updated')
+  console.log('   - New DOM content:', root.value?.textContent)
+})
+
+// Before unmount
+onBeforeUnmount(() => {
+  console.log('5. Before Unmount')
+  console.log('   - Component still functional')
+  console.log('   - Good time to cleanup')
+})
+
+// Unmounted
+onUnmounted(() => {
+  console.log('6. Unmounted')
+  console.log('   - Component removed from DOM')
+  console.log('   - Final cleanup')
+})
+</script>
+```
+
+## Common Patterns
+
+### Data Fetching
+
+```vue
+<script setup>
+import { ref, onMounted } from 'vue'
+
+const data = ref(null)
+const loading = ref(true)
+const error = ref(null)
+
+onMounted(async () => {
+  try {
+    const response = await fetch('/api/data')
+    data.value = await response.json()
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    loading.value = false
+  }
+})
+</script>
+```
+
+### Event Listeners
+
+```vue
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue'
+
+const windowWidth = ref(window.innerWidth)
+
+function handleResize() {
+  windowWidth.value = window.innerWidth
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+})
+</script>
+```
+
+### Third-Party Library Integration
+
+```vue
+<template>
+  <div ref="chart"></div>
+</template>
+
+<script setup>
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import Chart from 'chart.js'
+
+const chart = ref(null)
+const data = ref([1, 2, 3, 4, 5])
+let chartInstance = null
+
+onMounted(() => {
+  chartInstance = new Chart(chart.value, {
+    type: 'line',
+    data: {
+      labels: ['A', 'B', 'C', 'D', 'E'],
+      datasets: [{ data: data.value }]
+    }
+  })
+})
+
+// Update chart when data changes
+watch(data, (newData) => {
+  if (chartInstance) {
+    chartInstance.data.datasets[0].data = newData
+    chartInstance.update()
+  }
+}, { deep: true })
+
+onUnmounted(() => {
+  if (chartInstance) {
+    chartInstance.destroy()
+  }
+})
+</script>
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Always cleanup">
+    Remove event listeners, cancel timers, and unsubscribe from observables in `onUnmounted`.
+    
+    ```typescript
+    const timer = setInterval(() => {}, 1000)
+    onUnmounted(() => clearInterval(timer))
+    ```
+  </Step>
+
+  <Step title="Avoid side effects in update hooks">
+    Don't mutate state in `onBeforeUpdate` or `onUpdated` as it can cause infinite loops.
+  </Step>
+
+  <Step title="Use composition">
+    Extract reusable lifecycle logic into composables:
+    
+    ```typescript
+    function useWindowSize() {
+      const width = ref(window.innerWidth)
+      
+      function update() {
+        width.value = window.innerWidth
+      }
+      
+      onMounted(() => window.addEventListener('resize', update))
+      onUnmounted(() => window.removeEventListener('resize', update))
+      
+      return { width }
+    }
+    ```
+  </Step>
+
+  <Step title="Multiple hooks">
+    You can call the same hook multiple times. They execute in registration order.
+    
+    ```typescript
+    onMounted(() => console.log('First'))
+    onMounted(() => console.log('Second'))
+    ```
+  </Step>
+</Steps>
+
+## Async Setup Caveat
+
+<Warning>
+  When using async setup, make sure to register lifecycle hooks before the first `await` statement:
+  
+  ```typescript
+  // Good
+  onMounted(() => { /* ... */ })
+  await fetchData()
+  
+  // Bad - won't work!
+  await fetchData()
+  onMounted(() => { /* ... */ }) // ❌ Not registered!
+  ```
+</Warning>
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Watchers" icon="eye" href="/essentials/watchers">
+    React to data changes
+  </Card>
+  
+  <Card title="Reactivity Fundamentals" icon="bolt" href="/essentials/reactivity-fundamentals">
+    Learn about reactive state
+  </Card>
+  
+  <Card title="Components Basics" icon="puzzle-piece" href="/essentials/components-basics">
+    Understand component structure
+  </Card>
+</CardGroup>

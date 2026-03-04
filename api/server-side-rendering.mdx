@@ -1,0 +1,520 @@
+---
+title: Server-Side Rendering API
+---
+
+API reference for Vue's server-side rendering capabilities. These functions allow you to render Vue applications to strings or streams on the server.
+
+## renderToString()
+
+Renders a Vue application or VNode to an HTML string. The primary method for server-side rendering.
+
+**Type Signature:**
+```ts
+function renderToString(
+  input: App | VNode,
+  context?: SSRContext
+): Promise<string>
+```
+
+<ParamField path="input" type="App | VNode" required>
+  The Vue application instance (from `createSSRApp()`) or a VNode to render.
+</ParamField>
+
+<ParamField path="context" type="SSRContext">
+  Optional SSR context object for collecting metadata during rendering:
+  - `teleports`: Object to collect teleport content
+  - `__teleportBuffers`: Internal buffer for teleport rendering
+  - `__watcherHandles`: Internal array of watchers to clean up
+  
+  The context object is mutated during rendering to collect server-specific data.
+</ParamField>
+
+### Returns
+
+A Promise that resolves to the rendered HTML string.
+
+### Basic Usage
+
+```js
+import { createSSRApp } from 'vue'
+import { renderToString } from 'vue/server-renderer'
+import App from './App.vue'
+
+const app = createSSRApp(App)
+const html = await renderToString(app)
+
+console.log(html) // <div>...</div>
+```
+
+### With SSR Context
+
+```js
+import { createSSRApp } from 'vue'
+import { renderToString } from 'vue/server-renderer'
+import App from './App.vue'
+
+const app = createSSRApp(App)
+const context = {}
+
+const html = await renderToString(app, context)
+
+// Access teleport content
+if (context.teleports) {
+  console.log(context.teleports['#modal'])
+}
+```
+
+### Express Integration
+
+```js
+import express from 'express'
+import { createSSRApp } from 'vue'
+import { renderToString } from 'vue/server-renderer'
+import App from './App.vue'
+
+const app = express()
+
+app.get('*', async (req, res) => {
+  const vueApp = createSSRApp(App)
+  const ctx = {}
+  
+  try {
+    const html = await renderToString(vueApp, ctx)
+    
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Vue SSR</title>
+        </head>
+        <body>
+          <div id="app">${html}</div>
+          <script src="/client.js"></script>
+        </body>
+      </html>
+    `)
+  } catch (err) {
+    console.error(err)
+    res.status(500).send('Internal Server Error')
+  }
+})
+```
+
+### Rendering a VNode
+
+```js
+import { createVNode } from 'vue'
+import { renderToString } from 'vue/server-renderer'
+import MyComponent from './MyComponent.vue'
+
+const vnode = createVNode(MyComponent, { msg: 'Hello' })
+const html = await renderToString(vnode)
+```
+
+<Note>
+Always use `createSSRApp()` instead of `createApp()` for server-side rendering to enable SSR-specific optimizations.
+</Note>
+
+---
+
+## renderToNodeStream()
+
+Renders a Vue application to a Node.js Readable stream. Useful for streaming responses to clients.
+
+**Type Signature:**
+```ts
+function renderToNodeStream(
+  input: App | VNode,
+  context?: SSRContext
+): Readable
+```
+
+<ParamField path="input" type="App | VNode" required>
+  The Vue application instance or VNode to render.
+</ParamField>
+
+<ParamField path="context" type="SSRContext">
+  Optional SSR context object for collecting metadata.
+</ParamField>
+
+### Returns
+
+A Node.js Readable stream that emits HTML chunks.
+
+### Express Integration
+
+```js
+import express from 'express'
+import { createSSRApp } from 'vue'
+import { renderToNodeStream } from 'vue/server-renderer'
+import App from './App.vue'
+
+const app = express()
+
+app.get('*', (req, res) => {
+  const vueApp = createSSRApp(App)
+  const stream = renderToNodeStream(vueApp)
+  
+  res.setHeader('Content-Type', 'text/html')
+  res.write('<!DOCTYPE html><html><head><title>Vue SSR</title></head><body><div id="app">')
+  
+  stream.pipe(res, { end: false })
+  
+  stream.on('end', () => {
+    res.end('</div><script src="/client.js"></script></body></html>')
+  })
+  
+  stream.on('error', (err) => {
+    console.error(err)
+    res.status(500).end('Internal Server Error')
+  })
+})
+```
+
+<Note>
+`renderToNodeStream()` is only available in CommonJS builds. For ES module builds, use `pipeToNodeWritable()`.
+</Note>
+
+---
+
+## pipeToNodeWritable()
+
+Pipes the rendering output to a Node.js Writable stream. Available in both CommonJS and ES module builds.
+
+**Type Signature:**
+```ts
+function pipeToNodeWritable(
+  input: App | VNode,
+  context: SSRContext | undefined,
+  writable: Writable
+): void
+```
+
+<ParamField path="input" type="App | VNode" required>
+  The Vue application instance or VNode to render.
+</ParamField>
+
+<ParamField path="context" type="SSRContext | undefined">
+  Optional SSR context object for collecting metadata.
+</ParamField>
+
+<ParamField path="writable" type="Writable" required>
+  A Node.js Writable stream to pipe the output to (e.g., HTTP response object).
+</ParamField>
+
+### Express Integration
+
+```js
+import express from 'express'
+import { createSSRApp } from 'vue'
+import { pipeToNodeWritable } from 'vue/server-renderer'
+import App from './App.vue'
+
+const app = express()
+
+app.get('*', (req, res) => {
+  const vueApp = createSSRApp(App)
+  
+  res.setHeader('Content-Type', 'text/html')
+  res.write('<!DOCTYPE html><html><head><title>Vue SSR</title></head><body><div id="app">')
+  
+  pipeToNodeWritable(vueApp, {}, res)
+  
+  res.on('finish', () => {
+    res.end('</div><script src="/client.js"></script></body></html>')
+  })
+})
+```
+
+---
+
+## renderToWebStream()
+
+Renders a Vue application to a Web ReadableStream. Useful for modern edge runtimes and service workers.
+
+**Type Signature:**
+```ts
+function renderToWebStream(
+  input: App | VNode,
+  context?: SSRContext
+): ReadableStream
+```
+
+<ParamField path="input" type="App | VNode" required>
+  The Vue application instance or VNode to render.
+</ParamField>
+
+<ParamField path="context" type="SSRContext">
+  Optional SSR context object for collecting metadata.
+</ParamField>
+
+### Returns
+
+A Web ReadableStream that emits HTML chunks as Uint8Array.
+
+### Cloudflare Workers Integration
+
+```js
+import { createSSRApp } from 'vue'
+import { renderToWebStream } from 'vue/server-renderer'
+import App from './App.vue'
+
+export default {
+  async fetch(request) {
+    const vueApp = createSSRApp(App)
+    const stream = renderToWebStream(vueApp)
+    
+    const { readable, writable } = new TransformStream()
+    const writer = writable.getWriter()
+    
+    writer.write(new TextEncoder().encode(
+      '<!DOCTYPE html><html><head><title>Vue SSR</title></head><body><div id="app">'
+    ))
+    
+    stream.pipeTo(writable)
+    
+    return new Response(readable, {
+      headers: { 'Content-Type': 'text/html' }
+    })
+  }
+}
+```
+
+### Deno Integration
+
+```ts
+import { serve } from 'https://deno.land/std/http/server.ts'
+import { createSSRApp } from 'vue'
+import { renderToWebStream } from 'vue/server-renderer'
+import App from './App.vue'
+
+serve(async (req) => {
+  const vueApp = createSSRApp(App)
+  const stream = renderToWebStream(vueApp)
+  
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/html' }
+  })
+})
+```
+
+<Note>
+Requires a runtime that supports Web Streams API (Node.js 16.5+, Deno, Cloudflare Workers, etc.).
+</Note>
+
+---
+
+## pipeToWebWritable()
+
+Pipes the rendering output to a Web WritableStream.
+
+**Type Signature:**
+```ts
+function pipeToWebWritable(
+  input: App | VNode,
+  context: SSRContext | undefined,
+  writable: WritableStream
+): void
+```
+
+<ParamField path="input" type="App | VNode" required>
+  The Vue application instance or VNode to render.
+</ParamField>
+
+<ParamField path="context" type="SSRContext | undefined">
+  Optional SSR context object for collecting metadata.
+</ParamField>
+
+<ParamField path="writable" type="WritableStream" required>
+  A Web WritableStream to pipe the output to.
+</ParamField>
+
+### Example
+
+```js
+import { createSSRApp } from 'vue'
+import { pipeToWebWritable } from 'vue/server-renderer'
+import App from './App.vue'
+
+const vueApp = createSSRApp(App)
+const { readable, writable } = new TransformStream()
+
+pipeToWebWritable(vueApp, {}, writable)
+
+// Use the readable stream
+const response = new Response(readable, {
+  headers: { 'Content-Type': 'text/html' }
+})
+```
+
+---
+
+## renderToSimpleStream()
+
+Renders to a simple stream interface. Lower-level API for custom stream implementations.
+
+**Type Signature:**
+```ts
+interface SimpleReadable {
+  push(chunk: string | null): void
+  destroy(err: any): void
+}
+
+function renderToSimpleStream<T extends SimpleReadable>(
+  input: App | VNode,
+  context: SSRContext,
+  stream: T
+): T
+```
+
+<ParamField path="input" type="App | VNode" required>
+  The Vue application instance or VNode to render.
+</ParamField>
+
+<ParamField path="context" type="SSRContext" required>
+  SSR context object for collecting metadata.
+</ParamField>
+
+<ParamField path="stream" type="SimpleReadable" required>
+  A simple stream implementation with `push()` and `destroy()` methods.
+</ParamField>
+
+### Returns
+
+The same stream instance passed as parameter.
+
+### Custom Stream Implementation
+
+```js
+import { createSSRApp } from 'vue'
+import { renderToSimpleStream } from 'vue/server-renderer'
+import App from './App.vue'
+
+const vueApp = createSSRApp(App)
+
+const customStream = {
+  chunks: [],
+  push(chunk) {
+    if (chunk === null) {
+      console.log('Stream ended')
+    } else {
+      this.chunks.push(chunk)
+    }
+  },
+  destroy(err) {
+    console.error('Stream error:', err)
+  }
+}
+
+renderToSimpleStream(vueApp, {}, customStream)
+```
+
+---
+
+## SSRContext
+
+The context object used for server-side rendering.
+
+**Type Definition:**
+```ts
+interface SSRContext {
+  /**
+   * Teleport content collected during rendering
+   */
+  teleports?: Record<string, string>
+  
+  /**
+   * @internal
+   */
+  __teleportBuffers?: Record<string, SSRBuffer>
+  
+  /**
+   * @internal
+   */
+  __watcherHandles?: (() => void)[]
+  
+  /**
+   * Custom properties (user-defined)
+   */
+  [key: string]: any
+}
+```
+
+### Usage
+
+```js
+import { createSSRApp } from 'vue'
+import { renderToString } from 'vue/server-renderer'
+import App from './App.vue'
+
+const app = createSSRApp(App)
+const context = {
+  url: '/about',
+  userAgent: 'Mozilla/5.0...'
+}
+
+const html = await renderToString(app, context)
+
+// Access teleport content after rendering
+if (context.teleports) {
+  const modalContent = context.teleports['#modal']
+  // Inject modal content in appropriate place
+}
+```
+
+<Note>
+The SSRContext can be used to pass server-specific data to components via `inject()` and the `ssrContextKey`.
+</Note>
+
+---
+
+## Best Practices
+
+### Performance
+
+- Use streaming APIs (`renderToNodeStream`, `renderToWebStream`) for large applications
+- Streaming starts sending HTML before the entire app is rendered
+- Improves Time to First Byte (TTFB) and perceived performance
+
+### Error Handling
+
+```js
+import { createSSRApp } from 'vue'
+import { renderToString } from 'vue/server-renderer'
+import App from './App.vue'
+
+try {
+  const app = createSSRApp(App)
+  const html = await renderToString(app)
+  // Send response
+} catch (err) {
+  console.error('SSR Error:', err)
+  // Send error page or fallback
+}
+```
+
+### Teleport Handling
+
+```js
+import { createSSRApp } from 'vue'
+import { renderToString } from 'vue/server-renderer'
+import App from './App.vue'
+
+const app = createSSRApp(App)
+const ctx = {}
+const appHtml = await renderToString(app, ctx)
+
+const html = `
+<!DOCTYPE html>
+<html>
+  <body>
+    <div id="app">${appHtml}</div>
+    <div id="modal">${ctx.teleports?.['#modal'] || ''}</div>
+  </body>
+</html>
+`
+```
+
+<Warning>
+Never use `renderToString()` in the client. It's server-only. For client-side hydration, use `createSSRApp()` with `app.mount()`.
+</Warning>

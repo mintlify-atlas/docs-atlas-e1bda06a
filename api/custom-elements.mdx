@@ -1,0 +1,727 @@
+---
+title: Custom Elements API
+---
+
+API for defining Vue components as native Web Components (Custom Elements). Allows Vue components to be used in any HTML page or framework.
+
+## defineCustomElement()
+
+Defines a Vue component as a Web Component constructor. The resulting custom element can be registered and used as a native HTML element.
+
+**Type Signature:**
+```ts
+function defineCustomElement(
+  component: Component,
+  options?: CustomElementOptions
+): VueElementConstructor
+
+type VueElementConstructor<P = {}> = {
+  new (initialProps?: Record<string, any>): VueElement & P
+}
+```
+
+<ParamField path="component" type="Component" required>
+  A Vue component definition (options object, setup function, or SFC). Can be:
+  - Component options object
+  - Setup function
+  - Return value from `defineComponent()`
+  - Imported SFC (`.vue` file)
+</ParamField>
+
+<ParamField path="options" type="CustomElementOptions">
+  Additional configuration for the custom element:
+  - `styles`: Array of CSS strings to inject into shadow DOM
+  - `shadowRoot`: Whether to use shadow DOM (default: `true`)
+  - `shadowRootOptions`: Options for `attachShadow()`
+  - `nonce`: CSP nonce for style tags
+  - `configureApp`: Function to configure the app instance
+</ParamField>
+
+### Returns
+
+A custom element constructor that extends `HTMLElement`.
+
+### Basic Usage
+
+```js
+import { defineCustomElement } from 'vue'
+
+const MyElement = defineCustomElement({
+  props: ['msg'],
+  template: `<div>{{ msg }}</div>`,
+  styles: [`div { color: red; }`]
+})
+
+// Register the custom element
+customElements.define('my-element', MyElement)
+```
+
+```html
+<!-- Use in any HTML page -->
+<my-element msg="Hello!"></my-element>
+```
+
+### With SFC
+
+```vue
+<!-- MyComponent.vue -->
+<template>
+  <div>{{ msg }}</div>
+</template>
+
+<script setup>
+defineProps(['msg'])
+</script>
+
+<style scoped>
+div {
+  color: red;
+}
+</style>
+```
+
+```js
+import { defineCustomElement } from 'vue'
+import MyComponent from './MyComponent.vue'
+
+const MyElement = defineCustomElement(MyComponent)
+customElements.define('my-component', MyElement)
+```
+
+### With Setup Function
+
+```js
+import { defineCustomElement, ref } from 'vue'
+
+const Counter = defineCustomElement(
+  (props) => {
+    const count = ref(0)
+    
+    return () => h('button', {
+      onClick: () => count.value++
+    }, `Count: ${count.value}`)
+  },
+  {
+    props: ['initial'],
+    styles: [`button { padding: 10px; }`]
+  }
+)
+
+customElements.define('my-counter', Counter)
+```
+
+### With Shadow DOM Options
+
+```js
+import { defineCustomElement } from 'vue'
+import MyComponent from './MyComponent.vue'
+
+const MyElement = defineCustomElement(MyComponent, {
+  shadowRoot: true,
+  shadowRootOptions: {
+    delegatesFocus: true
+  }
+})
+
+customElements.define('my-element', MyElement)
+```
+
+### Passing Initial Props
+
+```js
+import { defineCustomElement } from 'vue'
+import MyComponent from './MyComponent.vue'
+
+const MyElement = defineCustomElement(MyComponent)
+customElements.define('my-element', MyElement)
+
+// Create with initial props
+const el = new MyElement({ msg: 'Hello', count: 42 })
+document.body.appendChild(el)
+```
+
+<Note>
+When using SFCs as custom elements, scoped styles are automatically converted to shadow DOM styles.
+</Note>
+
+---
+
+## defineSSRCustomElement()
+
+Defines a custom element with server-side rendering support. Used for declarative shadow DOM hydration.
+
+**Type Signature:**
+```ts
+function defineSSRCustomElement(
+  component: Component,
+  options?: CustomElementOptions
+): VueElementConstructor
+```
+
+<ParamField path="component" type="Component" required>
+  A Vue component definition.
+</ParamField>
+
+<ParamField path="options" type="CustomElementOptions">
+  Custom element configuration options.
+</ParamField>
+
+### Returns
+
+A custom element constructor that supports SSR hydration.
+
+### Example
+
+```js
+import { defineSSRCustomElement } from 'vue'
+import MyComponent from './MyComponent.vue'
+
+const MyElement = defineSSRCustomElement(MyComponent)
+customElements.define('my-element', MyElement)
+```
+
+```html
+<!-- Server-rendered with declarative shadow DOM -->
+<my-element>
+  <template shadowroot="open">
+    <div>Pre-rendered content</div>
+  </template>
+</my-element>
+```
+
+<Warning>
+Requires browser support for Declarative Shadow DOM or a polyfill. The custom element must have a pre-rendered `<template shadowroot="open">` element.
+</Warning>
+
+---
+
+## CustomElementOptions
+
+Configuration options for custom elements.
+
+**Type Definition:**
+```ts
+interface CustomElementOptions {
+  /**
+   * CSS strings to inject into shadow DOM
+   */
+  styles?: string[]
+  
+  /**
+   * Whether to attach shadow DOM (default: true)
+   */
+  shadowRoot?: boolean
+  
+  /**
+   * Options for attachShadow()
+   */
+  shadowRootOptions?: Omit<ShadowRootInit, 'mode'>
+  
+  /**
+   * CSP nonce for style tags
+   */
+  nonce?: string
+  
+  /**
+   * Configure the app instance
+   */
+  configureApp?: (app: App) => void
+}
+```
+
+### Options
+
+<ParamField path="styles" type="string[]">
+  Array of CSS strings to inject into the shadow DOM. Each string becomes a `<style>` tag.
+  
+  ```js
+  defineCustomElement(component, {
+    styles: [
+      `h1 { color: red; }`,
+      `.container { padding: 20px; }`
+    ]
+  })
+  ```
+</ParamField>
+
+<ParamField path="shadowRoot" type="boolean">
+  Whether to attach a shadow DOM. Defaults to `true`. Set to `false` to use light DOM.
+  
+  ```js
+  defineCustomElement(component, {
+    shadowRoot: false // Use light DOM
+  })
+  ```
+  
+  **Note:** Scoped styles won't work without shadow DOM.
+</ParamField>
+
+<ParamField path="shadowRootOptions" type="ShadowRootInit">
+  Options passed to `attachShadow()`. The `mode` is always set to `'open'`.
+  
+  ```js
+  defineCustomElement(component, {
+    shadowRootOptions: {
+      delegatesFocus: true,
+      slotAssignment: 'manual'
+    }
+  })
+  ```
+</ParamField>
+
+<ParamField path="nonce" type="string">
+  CSP nonce value for injected style tags.
+  
+  ```js
+  defineCustomElement(component, {
+    nonce: 'r4nd0m-n0nc3'
+  })
+  ```
+</ParamField>
+
+<ParamField path="configureApp" type="(app: App) => void">
+  Function to configure the internal app instance. Useful for registering plugins or global components.
+  
+  ```js
+  import { createPinia } from 'pinia'
+  
+  defineCustomElement(component, {
+    configureApp(app) {
+      app.use(createPinia())
+      app.config.errorHandler = (err) => {
+        console.error('Custom element error:', err)
+      }
+    }
+  })
+  ```
+</ParamField>
+
+---
+
+## useHost()
+
+Returns the custom element host instance. Only works inside components defined with `defineCustomElement()`.
+
+**Type Signature:**
+```ts
+function useHost(): VueElement | null
+```
+
+### Returns
+
+The `VueElement` instance (the custom element host), or `null` if not inside a custom element.
+
+### Example
+
+```vue
+<script setup>
+import { useHost } from 'vue'
+
+const host = useHost()
+
+if (host) {
+  // Access host element properties
+  console.log(host.tagName) // e.g., "MY-ELEMENT"
+  console.log(host.shadowRoot)
+  
+  // Call host methods
+  host.dispatchEvent(new CustomEvent('custom-event'))
+}
+</script>
+```
+
+### Accessing Shadow Root
+
+```vue
+<script setup>
+import { useHost, onMounted } from 'vue'
+
+const host = useHost()
+
+onMounted(() => {
+  if (host?.shadowRoot) {
+    // Manipulate shadow DOM
+    const style = document.createElement('style')
+    style.textContent = 'p { color: blue; }'
+    host.shadowRoot.appendChild(style)
+  }
+})
+</script>
+```
+
+<Warning>
+Must be called inside `setup()` or `<script setup>`. Returns `null` if the component is not rendered as a custom element.
+</Warning>
+
+---
+
+## useShadowRoot()
+
+Returns the shadow root of the custom element host. Shorthand for `useHost()?.shadowRoot`.
+
+**Type Signature:**
+```ts
+function useShadowRoot(): ShadowRoot | null
+```
+
+### Returns
+
+The `ShadowRoot` instance, or `null` if not inside a custom element or shadow DOM is disabled.
+
+### Example
+
+```vue
+<script setup>
+import { useShadowRoot, onMounted } from 'vue'
+
+const shadowRoot = useShadowRoot()
+
+onMounted(() => {
+  if (shadowRoot) {
+    // Query elements in shadow DOM
+    const button = shadowRoot.querySelector('button')
+    console.log(button)
+    
+    // Add event listeners
+    shadowRoot.addEventListener('click', (e) => {
+      console.log('Clicked inside shadow DOM', e.target)
+    })
+  }
+})
+</script>
+```
+
+### Adopting External Styles
+
+```vue
+<script setup>
+import { useShadowRoot, onMounted } from 'vue'
+
+const shadowRoot = useShadowRoot()
+
+onMounted(() => {
+  if (shadowRoot) {
+    // Adopt constructed stylesheets
+    const sheet = new CSSStyleSheet()
+    sheet.replaceSync('div { background: yellow; }')
+    shadowRoot.adoptedStyleSheets = [sheet]
+  }
+})
+</script>
+```
+
+<Note>
+Only works when `shadowRoot: true` (the default). Returns `null` for light DOM custom elements.
+</Note>
+
+---
+
+## VueElement
+
+The base class for Vue custom elements. Extends `HTMLElement`.
+
+**Class Definition:**
+```ts
+class VueElement extends HTMLElement {
+  /**
+   * Internal component instance
+   * @internal
+   */
+  _instance: ComponentInternalInstance | null
+  
+  /**
+   * Internal app instance
+   * @internal
+   */
+  _app: App | null
+  
+  /**
+   * Root element (element itself or shadow root)
+   * @internal
+   */
+  _root: Element | ShadowRoot
+}
+```
+
+### Properties
+
+Custom elements created with `defineCustomElement()` automatically have:
+
+- **Props as properties**: All declared props become element properties
+- **Props as attributes**: String/number props sync with HTML attributes
+- **Events**: All emitted events become CustomEvents
+- **Exposed values**: All `expose()`d values become element properties
+
+### Example
+
+```js
+import { defineCustomElement, ref } from 'vue'
+
+const Counter = defineCustomElement({
+  props: ['initial'],
+  emits: ['change'],
+  setup(props, { emit, expose }) {
+    const count = ref(props.initial || 0)
+    
+    const increment = () => {
+      count.value++
+      emit('change', count.value)
+    }
+    
+    expose({ increment, count })
+    
+    return { count, increment }
+  },
+  template: `
+    <button @click="increment">
+      Count: {{ count }}
+    </button>
+  `
+})
+
+customElements.define('my-counter', Counter)
+```
+
+```html
+<my-counter initial="10"></my-counter>
+
+<script>
+  const counter = document.querySelector('my-counter')
+  
+  // Access exposed properties
+  console.log(counter.count) // 10
+  
+  // Call exposed methods
+  counter.increment()
+  
+  // Listen to events
+  counter.addEventListener('change', (e) => {
+    console.log('New count:', e.detail)
+  })
+</script>
+```
+
+---
+
+## Props and Attributes
+
+### Prop Types
+
+Custom elements sync props with attributes based on prop types:
+
+```js
+defineCustomElement({
+  props: {
+    // String/number - syncs with attribute
+    msg: String,
+    count: Number,
+    
+    // Boolean - presence = true
+    disabled: Boolean,
+    
+    // Complex types - property only (no attribute sync)
+    items: Array,
+    config: Object
+  }
+})
+```
+
+### Attribute Mapping
+
+```html
+<!-- Attributes are converted to camelCase props -->
+<my-element
+  msg="Hello"
+  item-count="5"
+  disabled
+></my-element>
+```
+
+```js
+// Equivalent to:
+{
+  msg: 'Hello',
+  itemCount: 5,
+  disabled: true
+}
+```
+
+### Programmatic Props
+
+```js
+const el = document.querySelector('my-element')
+
+// Set via property (any type)
+el.items = [1, 2, 3]
+el.config = { theme: 'dark' }
+
+// Set via attribute (string/number only)
+el.setAttribute('msg', 'New message')
+el.setAttribute('count', '42')
+```
+
+---
+
+## Events
+
+All `emit()` calls become native `CustomEvent` dispatches.
+
+### Emitting Events
+
+```vue
+<script setup>
+const emit = defineEmits(['select', 'change'])
+
+function handleClick() {
+  emit('select', { id: 1, name: 'Item' })
+}
+</script>
+```
+
+### Listening to Events
+
+```html
+<my-element></my-element>
+
+<script>
+  const el = document.querySelector('my-element')
+  
+  // addEventListener
+  el.addEventListener('select', (e) => {
+    console.log(e.detail) // { id: 1, name: 'Item' }
+  })
+  
+  // Or use on* attribute
+  el.onselect = (e) => {
+    console.log(e.detail)
+  }
+</script>
+```
+
+### Event Names
+
+Vue automatically dispatches both camelCase and kebab-case versions:
+
+```js
+emit('customEvent', data)
+// Dispatches both:
+// - 'customEvent'
+// - 'custom-event'
+```
+
+---
+
+## Slots
+
+Custom elements support native `<slot>` elements.
+
+### Using Slots
+
+```vue
+<!-- MyElement.vue -->
+<template>
+  <div class="container">
+    <slot name="header"></slot>
+    <slot></slot>
+    <slot name="footer"></slot>
+  </div>
+</template>
+```
+
+```html
+<my-element>
+  <h1 slot="header">Title</h1>
+  <p>Default content</p>
+  <p slot="footer">Footer</p>
+</my-element>
+```
+
+### Scoped Slots
+
+Not directly supported. Use custom events or exposed methods instead.
+
+---
+
+## Lifecycle
+
+Custom elements follow the standard Web Component lifecycle:
+
+- **connectedCallback**: Called when inserted into DOM (triggers component mount)
+- **disconnectedCallback**: Called when removed from DOM (triggers unmount)
+- **attributeChangedCallback**: Called when observed attributes change (triggers prop updates)
+
+Vue lifecycle hooks work as expected inside the component.
+
+---
+
+## Best Practices
+
+### Build Configuration
+
+For production builds, configure your bundler to externalize Vue:
+
+```js
+// vite.config.js
+export default {
+  build: {
+    lib: {
+      entry: './src/my-element.js',
+      formats: ['es', 'umd'],
+      name: 'MyElement'
+    },
+    rollupOptions: {
+      external: ['vue'],
+      output: {
+        globals: {
+          vue: 'Vue'
+        }
+      }
+    }
+  }
+}
+```
+
+### TypeScript Support
+
+```ts
+import { defineCustomElement } from 'vue'
+import type { VueElementConstructor } from 'vue'
+import MyComponent from './MyComponent.vue'
+
+interface MyElementProps {
+  msg: string
+  count?: number
+}
+
+const MyElement: VueElementConstructor<MyElementProps> = 
+  defineCustomElement(MyComponent)
+
+customElements.define('my-element', MyElement)
+
+// Type-safe element creation
+const el = new MyElement({ msg: 'Hello', count: 5 })
+```
+
+### Provide/Inject
+
+Provide/inject works across custom element boundaries when custom elements are nested:
+
+```js
+// Parent custom element
+defineCustomElement({
+  setup() {
+    provide('theme', 'dark')
+  }
+})
+
+// Child custom element
+defineCustomElement({
+  setup() {
+    const theme = inject('theme') // Works!
+  }
+})
+```
+
+<Note>
+Vue custom elements are true Web Components and can be used with any framework or in vanilla JavaScript projects.
+</Note>

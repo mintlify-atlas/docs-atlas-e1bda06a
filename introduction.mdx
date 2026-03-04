@@ -1,0 +1,196 @@
+---
+title: Introduction to Vue.js
+description: Learn about Vue.js, the progressive JavaScript framework for building modern web user interfaces
+---
+
+# Introduction to Vue.js
+
+Vue.js is **the progressive JavaScript framework for building modern web UI**. Designed from the ground up to be incrementally adoptable, Vue makes it easy to build interactive user interfaces whether you're enhancing existing pages or building complex single-page applications.
+
+## What is Vue.js?
+
+Vue (pronounced /vjuː/, like "view") is a JavaScript framework that focuses on the view layer. It provides:
+
+- **Declarative rendering** with an intuitive template syntax
+- **Reactive data binding** that automatically updates the UI
+- **Component-based architecture** for building reusable UI elements
+- **Flexible and progressive** - works for both simple and complex applications
+
+<Note>
+Vue 3.5.29 is the current stable version, featuring improved performance, better TypeScript support, and the powerful Composition API.
+</Note>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Reactivity System" icon="bolt">
+    Vue's reactivity system automatically tracks dependencies and efficiently updates the DOM when data changes.
+  </Card>
+  
+  <Card title="Component-Based" icon="cube">
+    Build encapsulated components that manage their own state, then compose them to create complex UIs.
+  </Card>
+  
+  <Card title="Template Syntax" icon="code">
+    Declarative HTML-based template syntax that is compiled into optimized JavaScript rendering functions.
+  </Card>
+  
+  <Card title="Composition API" icon="layer-group">
+    Flexible API for organizing component logic, making code more maintainable and reusable.
+  </Card>
+</CardGroup>
+
+## Your First Vue Application
+
+Here's a minimal working example from the Vue.js source code that demonstrates Vue's core concepts:
+
+```html
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+<div id="editor">
+  <textarea :value="input" @input="update"></textarea>
+  <div v-html="output"></div>
+</div>
+
+<script>
+  const { ref, computed } = Vue
+
+  Vue.createApp({
+    setup() {
+      const input = ref('# hello')
+      const output = computed(() => 
+        marked.marked(input.value, { sanitize: true })
+      )
+      const update = _.debounce(e => {
+        input.value = e.target.value
+      }, 50)
+
+      return {
+        input,
+        output,
+        update
+      }
+    }
+  }).mount('#editor')
+</script>
+```
+
+<Tip>
+This example is from `packages/vue/examples/composition/markdown` in the Vue.js repository.
+</Tip>
+
+## Core Concepts
+
+### Reactivity with ref() and reactive()
+
+Vue's reactivity system is built on the `ref()` and `reactive()` functions from the `@vue/reactivity` package:
+
+```typescript
+// From packages/reactivity/src/ref.ts
+const { ref, computed } = Vue
+
+const input = ref('# hello')
+const output = computed(() => processInput(input.value))
+```
+
+<Note>
+According to `packages/reactivity/src/ref.ts:58-64`, `ref()` takes an inner value and returns a reactive and mutable ref object with a single `.value` property.
+</Note>
+
+### Template Compilation
+
+Vue compiles templates into optimized render functions. From `packages/vue/src/index.ts:30-102`, the compiler:
+
+- Parses template strings or DOM elements
+- Caches compiled results for performance
+- Supports both runtime and pre-compiled templates
+- Generates optimized JavaScript code
+
+### Composition API Setup
+
+The Composition API uses a `setup()` function that runs before component creation:
+
+```javascript
+// From packages/vue/examples/composition/commits
+const { createApp, ref, watchEffect } = Vue
+
+createApp({
+  setup() {
+    const currentBranch = ref('main')
+    const commits = ref(null)
+
+    watchEffect(() => {
+      fetch(`${API_URL}${currentBranch.value}`)
+        .then(res => res.json())
+        .then(data => {
+          commits.value = data
+        })
+    })
+
+    return {
+      currentBranch,
+      commits
+    }
+  }
+}).mount('#demo')
+```
+
+## Progressive Framework
+
+Vue is designed to be incrementally adoptable:
+
+<Steps>
+  <Step title="Drop-in Script">
+    Use Vue as a simple script tag for enhancing existing HTML pages
+  </Step>
+  
+  <Step title="Web Components">
+    Build reusable custom elements that work anywhere
+  </Step>
+  
+  <Step title="Single-Page Application">
+    Create full-featured SPAs with routing and state management
+  </Step>
+  
+  <Step title="Server-Side Rendering">
+    Optimize performance and SEO with SSR capabilities
+  </Step>
+</Steps>
+
+## Distribution Builds
+
+According to `packages/vue/README.md`, Vue provides multiple distribution builds:
+
+- **`vue.global.js`** - Full build with compiler for direct browser use
+- **`vue.runtime.global.js`** - Runtime-only build (templates pre-compiled)
+- **`vue.esm-bundler.js`** - For bundlers like webpack, Vite, Rollup
+- **`vue.esm-browser.js`** - Native ES modules for modern browsers
+
+<Warning>
+For production, always use the pre-compiled runtime build (`vue.runtime.esm-bundler.js`) with a build tool. The full build that includes the template compiler adds ~14KB to your bundle size.
+</Warning>
+
+## Why Vue?
+
+- **Approachable** - If you know HTML, CSS, and JavaScript, you can start building with Vue
+- **Versatile** - Scales between a library and a full-featured framework
+- **Performant** - 20KB min+gzip runtime with blazing fast virtual DOM
+- **Maintainable** - Component-based architecture promotes code reuse
+
+## Next Steps
+
+Ready to get started? Follow these guides:
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Set up Vue in your project with npm, CDN, or create-vue
+  </Card>
+  
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build your first Vue application step by step
+  </Card>
+</CardGroup>
+
+## License
+
+Vue.js is MIT-licensed open source software. Copyright (c) 2013-present, Yuxi (Evan) You.

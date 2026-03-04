@@ -1,0 +1,231 @@
+---
+title: Component Registration
+description: Learn about global and local component registration patterns in Vue.js
+---
+
+## Overview
+
+Vue components need to be registered so they can be discovered when rendering templates. There are two types of component registration: **global** and **local**.
+
+## Global Registration
+
+Globally registered components can be used in any template within the application.
+
+```js
+import { createApp } from 'vue'
+import MyComponent from './MyComponent.vue'
+
+const app = createApp({})
+app.component('MyComponent', MyComponent)
+```
+
+The `app.component()` method can be chained:
+
+```js
+app
+  .component('ComponentA', ComponentA)
+  .component('ComponentB', ComponentB)
+  .component('ComponentC', ComponentC)
+```
+
+### Usage in Templates
+
+```vue
+<template>
+  <MyComponent />
+</template>
+```
+
+### Downsides of Global Registration
+
+1. **Tree-shaking limitations**: Globally registered components cannot be removed by build tools even if unused
+2. **Implicit dependencies**: In large applications, it makes dependency relationships less explicit
+3. **Namespace pollution**: All components share the same global namespace
+
+## Local Registration
+
+Local registration limits component availability to the current scope, making dependencies more explicit and improving tree-shaking.
+
+### With `<script setup>`
+
+Imported components are automatically available locally:
+
+```vue
+<script setup>
+import ComponentA from './ComponentA.vue'
+import ComponentB from './ComponentB.vue'
+</script>
+
+<template>
+  <ComponentA />
+  <ComponentB />
+</template>
+```
+
+### Without `<script setup>`
+
+Use the `components` option:
+
+```js
+import ComponentA from './ComponentA.vue'
+import ComponentB from './ComponentB.vue'
+
+export default {
+  components: {
+    ComponentA,
+    ComponentB
+  },
+  setup() {
+    // ...
+  }
+}
+```
+
+## Component Name Casing
+
+### PascalCase (Recommended)
+
+```vue
+<template>
+  <MyComponent />
+</template>
+```
+
+**Benefits:**
+- Differentiates Vue components from native HTML elements
+- Consistent with JavaScript class naming conventions
+- Better IDE autocomplete support
+
+### kebab-case
+
+```vue
+<template>
+  <my-component></my-component>
+</template>
+```
+
+Vue automatically converts between PascalCase and kebab-case:
+
+```js
+app.component('MyComponent', MyComponent)
+```
+
+Both work in templates:
+```vue
+<MyComponent /> <!-- PascalCase -->
+<my-component></my-component> <!-- kebab-case -->
+```
+
+## Registration with TypeScript
+
+### Typing Global Components
+
+Extend the `GlobalComponents` interface for type safety:
+
+```ts
+import { RouterView } from 'vue-router'
+import MyComponent from './MyComponent.vue'
+
+declare module '@vue/runtime-core' {
+  interface GlobalComponents {
+    RouterView: typeof RouterView
+    MyComponent: typeof MyComponent
+  }
+}
+```
+
+Source: `runtime-core/src/component.ts:174-179`
+
+### Typing Local Components
+
+```ts
+import type { DefineComponent } from 'vue'
+import ComponentA from './ComponentA.vue'
+
+interface ComponentOptions {
+  components: {
+    ComponentA: DefineComponent
+  }
+}
+```
+
+## defineComponent
+
+The `defineComponent()` helper provides type inference for component definitions:
+
+```ts
+import { defineComponent } from 'vue'
+
+export default defineComponent({
+  name: 'MyComponent',
+  props: {
+    msg: String
+  },
+  setup(props) {
+    // props is fully typed
+    console.log(props.msg)
+  }
+})
+```
+
+### Function Signature
+
+```ts
+export function defineComponent(
+  options: ComponentOptions,
+  extraOptions?: ComponentOptions
+): DefineComponent
+```
+
+Source: `runtime-core/src/apiDefineComponent.ts:305-315`
+
+### Setup Function Overload
+
+```ts
+import { defineComponent } from 'vue'
+
+export default defineComponent(
+  (props: { msg: string }, ctx) => {
+    // setup function
+    return () => h('div', props.msg)
+  },
+  {
+    name: 'MyComponent',
+    props: ['msg']
+  }
+)
+```
+
+Source: `runtime-core/src/apiDefineComponent.ts:147-180`
+
+## Implementation Details
+
+The `defineComponent` implementation is close to a no-op, primarily providing type inference:
+
+```ts
+export function defineComponent(
+  options: unknown,
+  extraOptions?: ComponentOptions,
+) {
+  return isFunction(options)
+    ? (() =>
+        extend({ name: options.name }, extraOptions, { setup: options }))()
+    : options
+}
+```
+
+Source: `runtime-core/src/apiDefineComponent.ts:305-315`
+
+## Best Practices
+
+1. **Prefer local registration** for better tree-shaking and explicit dependencies
+2. **Use PascalCase** for component names in single-file components
+3. **Leverage `<script setup>`** for automatic local registration
+4. **Type global components** when using TypeScript
+5. **Use `defineComponent`** when not using `<script setup>` for better type inference
+
+## Related APIs
+
+- [Props](/components/props) - Learn about component props
+- [Events](/components/events) - Learn about component events
+- [Async Components](/components/async-components) - Learn about lazy loading components

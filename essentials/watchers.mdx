@@ -1,0 +1,631 @@
+---
+title: Watchers
+description: Learn how to watch and react to reactive data changes using watch(), watchEffect(), and related APIs.
+---
+
+Watchers allow you to perform side effects in response to reactive state changes.
+
+## watchEffect
+
+From `packages/runtime-core/src/apiWatch.ts:56-61`, `watchEffect` runs a function immediately and tracks its dependencies:
+
+```vue
+<script setup>
+import { ref, watchEffect } from 'vue'
+
+const count = ref(0)
+
+watchEffect(() => {
+  console.log(`Count is: ${count.value}`)
+  // Runs immediately and whenever count changes
+})
+
+count.value++ // Logs: "Count is: 1"
+</script>
+```
+
+### API Signature
+
+<ParamField path="effect" type="WatchEffect" required>
+  A function that will be run immediately and re-run when its dependencies change
+</ParamField>
+
+<ParamField path="options" type="WatchEffectOptions">
+  Optional configuration object
+</ParamField>
+
+<ParamField path="return" type="WatchHandle">
+  A function to stop the watcher
+</ParamField>
+
+```typescript
+type WatchEffect = (onCleanup: OnCleanup) => void
+
+interface WatchEffectOptions {
+  flush?: 'pre' | 'post' | 'sync'
+  onTrack?: (event: DebuggerEvent) => void
+  onTrigger?: (event: DebuggerEvent) => void
+}
+```
+
+## watch
+
+From `packages/runtime-core/src/apiWatch.ts:92-144`, `watch` requires explicit sources to track:
+
+<CodeGroup>
+```vue Single Source
+<script setup>
+import { ref, watch } from 'vue'
+
+const count = ref(0)
+
+watch(count, (newValue, oldValue) => {
+  console.log(`Count changed from ${oldValue} to ${newValue}`)
+})
+
+count.value++ // Logs: "Count changed from 0 to 1"
+</script>
+```
+
+```vue Multiple Sources
+<script setup>
+import { ref, watch } from 'vue'
+
+const x = ref(0)
+const y = ref(0)
+
+watch([x, y], ([newX, newY], [oldX, oldY]) => {
+  console.log(`x: ${oldX} -> ${newX}, y: ${oldY} -> ${newY}`)
+})
+</script>
+```
+
+```vue Getter Function
+<script setup>
+import { reactive, watch } from 'vue'
+
+const state = reactive({ count: 0 })
+
+watch(
+  () => state.count,
+  (newValue, oldValue) => {
+    console.log(`Count changed from ${oldValue} to ${newValue}`)
+  }
+)
+</script>
+```
+</CodeGroup>
+
+### API Signature
+
+<ParamField path="source" type="WatchSource<T> | WatchSource<T>[]" required>
+  The reactive source(s) to watch
+</ParamField>
+
+<ParamField path="callback" type="WatchCallback<T>" required>
+  The callback function to execute when the source changes
+</ParamField>
+
+<ParamField path="options" type="WatchOptions">
+  Optional configuration object
+</ParamField>
+
+```typescript
+type WatchSource<T> = Ref<T> | (() => T)
+
+type WatchCallback<T> = (
+  value: T,
+  oldValue: T,
+  onCleanup: OnCleanup
+) => void
+
+interface WatchOptions<Immediate = boolean> {
+  immediate?: Immediate
+  deep?: boolean | number
+  flush?: 'pre' | 'post' | 'sync'
+  once?: boolean
+  onTrack?: (event: DebuggerEvent) => void
+  onTrigger?: (event: DebuggerEvent) => void
+}
+```
+
+## watch vs watchEffect
+
+<CodeGroup>
+```typescript watchEffect - Implicit
+import { ref, watchEffect } from 'vue'
+
+const count = ref(0)
+const name = ref('John')
+
+// Automatically tracks count and name
+watchEffect(() => {
+  console.log(`${name.value}: ${count.value}`)
+})
+// Runs immediately
+// Re-runs when count OR name changes
+```
+
+```typescript watch - Explicit
+import { ref, watch } from 'vue'
+
+const count = ref(0)
+const name = ref('John')
+
+// Explicitly watch specific sources
+watch([count, name], ([newCount, newName], [oldCount, oldName]) => {
+  console.log(`${newName}: ${newCount}`)
+})
+// Doesn't run immediately by default
+// Only re-runs when count OR name changes
+```
+</CodeGroup>
+
+<Tip>
+  **When to use which:**
+  - Use `watchEffect` when you need the function to run immediately and track dependencies automatically
+  - Use `watch` when you need explicit control over what to watch and access to old values
+</Tip>
+
+## Watch Options
+
+### immediate
+
+Run callback immediately:
+
+```vue
+<script setup>
+import { ref, watch } from 'vue'
+
+const count = ref(0)
+
+watch(
+  count,
+  (newValue) => {
+    console.log(`Count: ${newValue}`)
+  },
+  { immediate: true } // Runs immediately with initial value
+)
+// Logs: "Count: 0"
+</script>
+```
+
+### deep
+
+From `packages/runtime-core/src/apiWatch.ts:49-53`, watch nested properties:
+
+```vue
+<script setup>
+import { reactive, watch } from 'vue'
+
+const state = reactive({
+  user: {
+    name: 'John',
+    profile: {
+      age: 30
+    }
+  }
+})
+
+watch(
+  () => state.user,
+  (newValue) => {
+    console.log('User changed:', newValue)
+  },
+  { deep: true } // Watch nested properties
+)
+
+state.user.profile.age = 31 // Triggers watch
+</script>
+```
+
+<Warning>
+  Deep watchers traverse all nested properties and can be expensive for large objects. Use specific getters when possible.
+</Warning>
+
+### flush
+
+From `packages/runtime-core/src/apiWatch.ts:45-47`, control when the callback runs:
+
+```vue
+<script setup>
+import { ref, watch } from 'vue'
+
+const count = ref(0)
+
+// Default: 'pre' - before component updates
+watch(count, () => {
+  console.log('Pre-flush')
+}, { flush: 'pre' })
+
+// 'post' - after component updates (can access updated DOM)
+watch(count, () => {
+  console.log('Post-flush')
+}, { flush: 'post' })
+
+// 'sync' - runs synchronously (use with caution)
+watch(count, () => {
+  console.log('Sync')
+}, { flush: 'sync' })
+</script>
+```
+
+### once
+
+From `packages/runtime-core/src/apiWatch.ts:52`, run callback only once:
+
+```vue
+<script setup>
+import { ref, watch } from 'vue'
+
+const count = ref(0)
+
+watch(
+  count,
+  (newValue) => {
+    console.log('Triggered once:', newValue)
+  },
+  { once: true } // Only triggers the first time count changes
+)
+
+count.value++ // Logs
+count.value++ // Doesn't log
+</script>
+```
+
+## watchPostEffect
+
+From `packages/runtime-core/src/apiWatch.ts:63-74`, an alias for `watchEffect` with `flush: 'post'`:
+
+```vue
+<template>
+  <div ref="el">{{ count }}</div>
+</template>
+
+<script setup>
+import { ref, watchPostEffect } from 'vue'
+
+const count = ref(0)
+const el = ref(null)
+
+watchPostEffect(() => {
+  // Runs after component updates
+  console.log('Updated DOM:', el.value?.textContent)
+})
+</script>
+```
+
+## watchSyncEffect
+
+From `packages/runtime-core/src/apiWatch.ts:76-87`, runs synchronously:
+
+```vue
+<script setup>
+import { ref, watchSyncEffect } from 'vue'
+
+const count = ref(0)
+
+watchSyncEffect(() => {
+  console.log('Sync:', count.value)
+})
+
+count.value++ // Logs immediately, synchronously
+</script>
+```
+
+<Warning>
+  Use `watchSyncEffect` sparingly as it can cause performance issues. It runs synchronously, potentially multiple times in a single "tick".
+</Warning>
+
+## Stopping Watchers
+
+Watchers return a stop handle:
+
+```vue
+<script setup>
+import { ref, watchEffect } from 'vue'
+
+const count = ref(0)
+
+const stop = watchEffect(() => {
+  console.log(`Count: ${count.value}`)
+})
+
+// Later, stop watching
+stop()
+
+count.value++ // Won't log
+</script>
+```
+
+<Note>
+  Watchers registered in `setup()` or `<script setup>` are automatically stopped when the component unmounts. Manual cleanup is only needed for watchers created asynchronously or that should stop earlier.
+</Note>
+
+## Cleanup Function
+
+Register a cleanup function for side effects:
+
+```vue
+<script setup>
+import { ref, watchEffect } from 'vue'
+
+const id = ref(0)
+
+watchEffect((onCleanup) => {
+  const controller = new AbortController()
+  
+  fetch(`/api/data/${id.value}`, { signal: controller.signal })
+    .then(/* ... */)
+  
+  onCleanup(() => {
+    // Cancel the request if id changes before completion
+    controller.abort()
+  })
+})
+</script>
+```
+
+From `packages/runtime-core/src/apiWatch.ts:146-242`, the cleanup function is called:
+- Before the watcher re-runs
+- When the watcher is stopped
+
+## Watcher Debugging
+
+Use debug options to trace reactivity:
+
+```vue
+<script setup>
+import { ref, watch } from 'vue'
+
+const count = ref(0)
+
+watch(
+  count,
+  (newValue) => {
+    console.log('Count changed to:', newValue)
+  },
+  {
+    onTrack(e) {
+      console.log('Tracked:', e)
+    },
+    onTrigger(e) {
+      console.log('Triggered:', e)
+    }
+  }
+)
+</script>
+```
+
+## Watching Reactive Objects
+
+<CodeGroup>
+```vue Watch Whole Object
+<script setup>
+import { reactive, watch } from 'vue'
+
+const state = reactive({ count: 0, name: 'John' })
+
+// Automatically deep watch
+watch(state, (newValue) => {
+  console.log('State changed:', newValue)
+})
+
+state.count++ // Triggers
+state.name = 'Jane' // Triggers
+</script>
+```
+
+```vue Watch Specific Property
+<script setup>
+import { reactive, watch } from 'vue'
+
+const state = reactive({ count: 0, name: 'John' })
+
+// Watch specific property with getter
+watch(
+  () => state.count,
+  (newValue, oldValue) => {
+    console.log(`Count: ${oldValue} -> ${newValue}`)
+  }
+)
+
+state.count++ // Triggers
+state.name = 'Jane' // Doesn't trigger
+</script>
+```
+</CodeGroup>
+
+## Advanced Patterns
+
+### Debounced Watch
+
+```vue
+<script setup>
+import { ref, watch } from 'vue'
+
+const searchQuery = ref('')
+
+let timeout = null
+watch(searchQuery, (newQuery) => {
+  clearTimeout(timeout)
+  timeout = setTimeout(() => {
+    console.log('Searching for:', newQuery)
+    // Perform search
+  }, 300)
+})
+</script>
+```
+
+### Conditional Watch
+
+```vue
+<script setup>
+import { ref, watch } from 'vue'
+
+const count = ref(0)
+const enabled = ref(true)
+
+watch(
+  count,
+  (newValue) => {
+    if (enabled.value) {
+      console.log('Count:', newValue)
+    }
+  }
+)
+</script>
+```
+
+### Watch with Async Operations
+
+```vue
+<script setup>
+import { ref, watch } from 'vue'
+
+const userId = ref(1)
+const userData = ref(null)
+
+watch(userId, async (newId, oldId, onCleanup) => {
+  let cancelled = false
+  
+  onCleanup(() => {
+    cancelled = true
+  })
+  
+  const data = await fetchUser(newId)
+  
+  if (!cancelled) {
+    userData.value = data
+  }
+})
+</script>
+```
+
+## Watch Implementation Details
+
+From `packages/runtime-core/src/apiWatch.ts:146-242`, the `doWatch` function:
+
+```typescript
+function doWatch(
+  source: WatchSource | WatchSource[] | WatchEffect | object,
+  cb: WatchCallback | null,
+  options: WatchOptions = EMPTY_OBJ
+): WatchHandle {
+  const { immediate, deep, flush, once } = options
+  
+  const baseWatchOptions: BaseWatchOptions = extend({}, options)
+  
+  let isPre = false
+  if (flush === 'post') {
+    baseWatchOptions.scheduler = job => {
+      queuePostRenderEffect(job, instance && instance.suspense)
+    }
+  } else if (flush !== 'sync') {
+    // default: 'pre'
+    isPre = true
+    baseWatchOptions.scheduler = (job, isFirstRun) => {
+      if (isFirstRun) {
+        job()
+      } else {
+        queueJob(job)
+      }
+    }
+  }
+  
+  const watchHandle = baseWatch(source, cb, baseWatchOptions)
+  
+  return watchHandle
+}
+```
+
+## Common Use Cases
+
+<Steps>
+  <Step title="Data fetching">
+    ```typescript
+    watch(userId, async (id) => {
+      data.value = await fetchUser(id)
+    })
+    ```
+  </Step>
+
+  <Step title="Local storage sync">
+    ```typescript
+    watch(settings, (newSettings) => {
+      localStorage.setItem('settings', JSON.stringify(newSettings))
+    }, { deep: true })
+    ```
+  </Step>
+
+  <Step title="DOM side effects">
+    ```typescript
+    watchPostEffect(() => {
+      if (isVisible.value) {
+        element.value?.focus()
+      }
+    })
+    ```
+  </Step>
+
+  <Step title="Logging and analytics">
+    ```typescript
+    watch(route, (to, from) => {
+      analytics.track('pageview', { from: from.path, to: to.path })
+    })
+    ```
+  </Step>
+</Steps>
+
+## Best Practices
+
+<Steps>
+  <Step title="Prefer computed for derived state">
+    Use computed properties for synchronous data transformations, not watchers.
+    
+    ```typescript
+    // Bad - using watch for derived state
+    watch(firstName, () => {
+      fullName.value = `${firstName.value} ${lastName.value}`
+    })
+    
+    // Good - using computed
+    const fullName = computed(() => `${firstName.value} ${lastName.value}`)
+    ```
+  </Step>
+
+  <Step title="Use cleanup functions">
+    Always cleanup side effects that may become stale.
+    
+    ```typescript
+    watchEffect((onCleanup) => {
+      const timer = setTimeout(() => {}, 1000)
+      onCleanup(() => clearTimeout(timer))
+    })
+    ```
+  </Step>
+
+  <Step title="Avoid deep watchers on large objects">
+    Deep watching traverses all nested properties. Use specific getters instead.
+  </Step>
+
+  <Step title="Stop watchers when needed">
+    Manually created watchers (async) should be stopped to prevent memory leaks.
+  </Step>
+</Steps>
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Computed Properties" icon="calculator" href="/essentials/computed-properties">
+    For derived reactive state
+  </Card>
+  
+  <Card title="Reactivity Fundamentals" icon="bolt" href="/essentials/reactivity-fundamentals">
+    Understanding reactive data
+  </Card>
+  
+  <Card title="Lifecycle Hooks" icon="clock" href="/essentials/lifecycle-hooks">
+    Execute code at lifecycle stages
+  </Card>
+</CardGroup>

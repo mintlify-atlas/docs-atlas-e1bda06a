@@ -1,0 +1,432 @@
+---
+title: Reactivity Fundamentals
+description: Learn how to create reactive state in Vue 3 using ref() and reactive() from the reactivity package.
+---
+
+Vue's reactivity system is built on JavaScript Proxies and allows you to automatically track changes to data and update the DOM accordingly.
+
+## Reactive State with ref()
+
+The `ref()` function from `packages/reactivity/src/ref.ts:58-65` creates a reactive reference to a value:
+
+```typescript
+import { ref } from 'vue'
+
+const count = ref(0)
+
+console.log(count.value) // 0
+
+count.value++
+console.log(count.value) // 1
+```
+
+### API Signature
+
+<ParamField path="value" type="T">
+  The initial value to wrap in a ref
+</ParamField>
+
+<ParamField path="return" type="Ref<UnwrapRef<T>>">
+  A reactive ref object with a `.value` property
+</ParamField>
+
+### How ref() Works
+
+From `packages/reactivity/src/ref.ts:103-108`, `ref()` creates a `RefImpl` instance:
+
+```typescript
+class RefImpl<T = any> {
+  _value: T
+  private _rawValue: T
+  dep: Dep = new Dep()
+  
+  public readonly __v_isRef = true
+  public readonly __v_isShallow: boolean = false
+
+  constructor(value: T, isShallow: boolean) {
+    this._rawValue = isShallow ? value : toRaw(value)
+    this._value = isShallow ? value : toReactive(value)
+    this.__v_isShallow = isShallow
+  }
+
+  get value() {
+    this.dep.track() // Track dependencies
+    return this._value
+  }
+
+  set value(newValue) {
+    // Detect changes and trigger updates
+    if (hasChanged(newValue, this._rawValue)) {
+      this._rawValue = newValue
+      this._value = this.__v_isShallow ? newValue : toReactive(newValue)
+      this.dep.trigger() // Trigger effects
+    }
+  }
+}
+```
+
+### Using Refs in Templates
+
+Refs are automatically unwrapped in templates:
+
+```vue
+<template>
+  <div>
+    <!-- No need for .value in template -->
+    <p>Count: {{ count }}</p>
+    <button @click="count++">Increment</button>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const count = ref(0)
+</script>
+```
+
+<Note>
+  In templates, refs are automatically unwrapped. In JavaScript code, you must use `.value` to access or modify the ref's value.
+</Note>
+
+## Reactive State with reactive()
+
+The `reactive()` function from `packages/reactivity/src/reactive.ts:91-105` creates a deep reactive proxy of an object:
+
+```typescript
+import { reactive } from 'vue'
+
+const state = reactive({
+  count: 0,
+  nested: {
+    value: 'hello'
+  }
+})
+
+console.log(state.count) // 0
+state.count++
+console.log(state.count) // 1
+
+// Nested properties are also reactive
+state.nested.value = 'world'
+```
+
+### API Signature
+
+<ParamField path="target" type="object" required>
+  The source object to make reactive
+</ParamField>
+
+<ParamField path="return" type="Reactive<T>">
+  A reactive proxy of the object with deeply unwrapped nested refs
+</ParamField>
+
+### How reactive() Works
+
+From `packages/reactivity/src/reactive.ts:261-302`:
+
+```typescript
+function createReactiveObject(
+  target: Target,
+  isReadonly: boolean,
+  baseHandlers: ProxyHandler<any>,
+  collectionHandlers: ProxyHandler<any>,
+  proxyMap: WeakMap<Target, any>
+) {
+  if (!isObject(target)) {
+    if (__DEV__) {
+      warn(`value cannot be made reactive: ${String(target)}`)
+    }
+    return target
+  }
+  
+  // Target already has corresponding Proxy
+  const existingProxy = proxyMap.get(target)
+  if (existingProxy) {
+    return existingProxy
+  }
+  
+  const proxy = new Proxy(target, baseHandlers)
+  proxyMap.set(target, proxy)
+  return proxy
+}
+```
+
+The reactive conversion is "deep": it affects all nested properties.
+
+## ref() vs reactive()
+
+<CodeGroup>
+```typescript ref() - For Primitives
+import { ref } from 'vue'
+
+// Best for primitive values
+const count = ref(0)
+const message = ref('hello')
+const isActive = ref(true)
+
+// Access via .value
+console.log(count.value)
+count.value++
+```
+
+```typescript reactive() - For Objects
+import { reactive } from 'vue'
+
+// Best for objects
+const state = reactive({
+  count: 0,
+  message: 'hello',
+  isActive: true
+})
+
+// Direct property access
+console.log(state.count)
+state.count++
+```
+</CodeGroup>
+
+<Tip>
+  **When to use which:**
+  - Use `ref()` for primitive values (numbers, strings, booleans)
+  - Use `ref()` when you need to reassign the entire value
+  - Use `reactive()` for objects and arrays
+  - Use `ref()` consistently for a uniform API
+</Tip>
+
+## Additional Reactive APIs
+
+### shallowRef()
+
+From `packages/reactivity/src/ref.ts:90-101`, creates a ref that tracks its own `.value` change but doesn't make the value reactive:
+
+```typescript
+import { shallowRef } from 'vue'
+
+const state = shallowRef({ count: 1 })
+
+// Triggers reactivity
+state.value = { count: 2 }
+
+// Does NOT trigger reactivity
+state.value.count = 3
+```
+
+### shallowReactive()
+
+From `packages/reactivity/src/reactive.ts:142-152`, creates a shallow reactive proxy:
+
+```typescript
+import { shallowReactive } from 'vue'
+
+const state = shallowReactive({
+  foo: 1,
+  nested: { bar: 2 }
+})
+
+// Reactive
+state.foo++
+
+// NOT reactive
+state.nested.bar++
+```
+
+### readonly()
+
+From `packages/reactivity/src/reactive.ts:208-218`, creates a readonly proxy:
+
+```typescript
+import { reactive, readonly } from 'vue'
+
+const original = reactive({ count: 0 })
+const copy = readonly(original)
+
+// Works
+original.count++
+
+// Warns and fails
+copy.count++
+```
+
+## Utility Functions
+
+### isRef()
+
+From `packages/reactivity/src/ref.ts:45-49`, checks if a value is a ref:
+
+```typescript
+import { ref, isRef } from 'vue'
+
+const count = ref(0)
+const plain = 0
+
+console.log(isRef(count)) // true
+console.log(isRef(plain)) // false
+```
+
+### unref()
+
+From `packages/reactivity/src/ref.ts:231-233`, returns the value if it's a ref, otherwise returns the value itself:
+
+```typescript
+import { ref, unref } from 'vue'
+
+function useFoo(x: number | Ref<number>) {
+  const unwrapped = unref(x)
+  // unwrapped is guaranteed to be number now
+}
+```
+
+### toRef()
+
+From `packages/reactivity/src/ref.ts:465-496`, creates a ref from a reactive object property:
+
+```typescript
+import { reactive, toRef } from 'vue'
+
+const state = reactive({ foo: 1, bar: 2 })
+const fooRef = toRef(state, 'foo')
+
+// Mutating the ref updates the original
+fooRef.value++
+console.log(state.foo) // 2
+
+// Mutating the original also updates the ref
+state.foo++
+console.log(fooRef.value) // 3
+```
+
+### toRefs()
+
+From `packages/reactivity/src/ref.ts:345-354`, converts all properties of a reactive object to refs:
+
+```typescript
+import { reactive, toRefs } from 'vue'
+
+const state = reactive({
+  foo: 1,
+  bar: 2
+})
+
+const stateAsRefs = toRefs(state)
+// stateAsRefs.foo is now a ref linked to state.foo
+
+stateAsRefs.foo.value++
+console.log(state.foo) // 2
+```
+
+<Tip>
+  `toRefs` is useful when returning a reactive object from a composable function, so consumers can destructure without losing reactivity:
+  
+  ```typescript
+  export function useMouse() {
+    const state = reactive({ x: 0, y: 0 })
+    // ... logic
+    return toRefs(state)
+  }
+  
+  // Destructuring works!
+  const { x, y } = useMouse()
+  ```
+</Tip>
+
+### toValue()
+
+From `packages/reactivity/src/ref.ts:251-253`, normalizes values/refs/getters to values:
+
+```typescript
+import { ref, toValue } from 'vue'
+
+toValue(1) // 1
+toValue(ref(1)) // 1
+toValue(() => 1) // 1
+```
+
+## Reactivity Utilities
+
+### isReactive()
+
+From `packages/reactivity/src/reactive.ts:323-328`, checks if an object is reactive:
+
+```typescript
+import { reactive, readonly, isReactive } from 'vue'
+
+const state = reactive({ count: 0 })
+console.log(isReactive(state)) // true
+
+const plain = { count: 0 }
+console.log(isReactive(plain)) // false
+```
+
+### isReadonly()
+
+From `packages/reactivity/src/reactive.ts:342-344`, checks if an object is readonly:
+
+```typescript
+import { reactive, readonly, isReadonly } from 'vue'
+
+const original = reactive({ count: 0 })
+const copy = readonly(original)
+
+console.log(isReadonly(copy)) // true
+console.log(isReadonly(original)) // false
+```
+
+### isProxy()
+
+From `packages/reactivity/src/reactive.ts:359-361`, checks if an object is a reactive or readonly proxy:
+
+```typescript
+import { reactive, readonly, isProxy } from 'vue'
+
+console.log(isProxy(reactive({}))) // true
+console.log(isProxy(readonly({}))) // true
+```
+
+### toRaw()
+
+From `packages/reactivity/src/reactive.ts:387-390`, returns the raw object:
+
+```typescript
+import { reactive, toRaw } from 'vue'
+
+const foo = {}
+const reactiveFoo = reactive(foo)
+
+console.log(toRaw(reactiveFoo) === foo) // true
+```
+
+### markRaw()
+
+From `packages/reactivity/src/reactive.ts:416-420`, marks an object to never be converted to a proxy:
+
+```typescript
+import { reactive, markRaw, isReactive } from 'vue'
+
+const foo = markRaw({})
+console.log(isReactive(reactive(foo))) // false
+
+// Also works when nested
+const bar = reactive({ foo })
+console.log(isReactive(bar.foo)) // false
+```
+
+<Warning>
+  Use `markRaw()` with caution. It allows you to selectively opt-out of reactive conversion, which can lead to reactivity issues if not used properly.
+</Warning>
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Computed Properties" icon="calculator" href="/essentials/computed-properties">
+    Derive reactive state with computed()
+  </Card>
+  
+  <Card title="Watchers" icon="eye" href="/essentials/watchers">
+    React to state changes with watch()
+  </Card>
+  
+  <Card title="Lifecycle Hooks" icon="clock" href="/essentials/lifecycle-hooks">
+    Execute code at specific lifecycle stages
+  </Card>
+</CardGroup>

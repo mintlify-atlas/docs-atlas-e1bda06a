@@ -1,97 +1,276 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: Vue.js Documentation
+description: The progressive JavaScript framework for building modern web user interfaces
+mode: custom
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-gradient-to-br from-[#42b983] via-[#35495e] to-[#1F2D3D] dark:from-[#42b983] dark:via-[#2c3e50] dark:to-[#0f1117] py-20 px-4">
+  <div className="max-w-6xl mx-auto">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-6">
+          The Progressive JavaScript Framework
+        </h1>
+        <p className="text-xl sm:text-2xl text-white/90 mb-8 max-w-2xl">
+          Build user interfaces with an approachable, performant, and versatile framework trusted by millions of developers worldwide.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center px-8 py-3.5 bg-white text-[#42b983] rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors no-underline"
+          >
+            Get Started
+          </a>
+          <a 
+            href="/introduction" 
+            className="inline-flex items-center px-8 py-3.5 border-2 border-white/30 bg-white/10 text-white rounded-lg font-semibold text-lg hover:bg-white/20 transition-colors no-underline backdrop-blur-sm"
+          >
+            Learn More
+          </a>
+        </div>
+      </div>
+      <div className="lg:col-span-5 flex justify-center lg:justify-end">
+        <div className="relative w-64 h-64 lg:w-80 lg:h-80">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#42b983]/20 to-transparent rounded-full blur-3xl"></div>
+          <svg className="relative w-full h-full" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#42b983" d="M78.8,10L64,35.4L49.2,10H0l64,110l64-110C128,10,78.8,10,78.8,10z"/>
+            <path fill="#35495e" d="M78.8,10L64,35.4L49.2,10H25.6L64,76l38.4-66H78.8z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Quick start
+    </h2>
+    <p className="text-lg text-gray-600 dark:text-gray-400">
+      Get up and running with Vue in minutes
+    </p>
+  </div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+  <Steps>
+    <Step title="Install Vue">
+      Create a new Vue project using the official scaffolding tool:
+      
+      <CodeGroup>
+      ```bash npm
+      npm create vue@latest
+      ```
+      ```bash yarn
+      yarn create vue
+      ```
+      ```bash pnpm
+      pnpm create vue
+      ```
+      </CodeGroup>
+    </Step>
 
-## Make it yours
+    <Step title="Create your first component">
+      Build reactive interfaces with Vue's intuitive component syntax:
 
-Design a docs site that looks great and empowers your users.
+      ```vue App.vue
+      <script setup>
+      import { ref } from 'vue'
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
+      const count = ref(0)
+      </script>
+
+      <template>
+        <button @click="count++">
+          Count is: {{ count }}
+        </button>
+      </template>
+      ```
+    </Step>
+
+    <Step title="Start the dev server">
+      Run your application and see live changes:
+
+      ```bash
+      npm run dev
+      ```
+
+      <Note>
+        Your app will be available at `http://localhost:5173`
+      </Note>
+    </Step>
+  </Steps>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Core features
+    </h2>
+    <p className="text-lg text-gray-600 dark:text-gray-400">
+      Everything you need to build modern web applications
+    </p>
+  </div>
+
+  <CardGroup cols={3}>
     <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+      title="Reactivity system"
+      icon="bolt"
+      href="/essentials/reactivity-fundamentals"
+    >
+      Efficient and intuitive reactive data binding with automatic dependency tracking
+    </Card>
+    <Card
+      title="Component model"
+      icon="cube"
+      href="/essentials/components-basics"
+    >
+      Compose your UI with reusable, self-contained components
+    </Card>
+    <Card
+      title="Template syntax"
+      icon="code"
+      href="/essentials/template-syntax"
+    >
+      Declarative rendering with an HTML-based template syntax
+    </Card>
+    <Card
+      title="Composition API"
+      icon="layer-group"
+      href="/api/composition-api-setup"
+    >
+      Flexible and powerful code organization for complex applications
+    </Card>
+    <Card
+      title="Single-file components"
+      icon="file-code"
+      href="/scaling-up/single-file-components"
+    >
+      Build components with template, logic, and styles in a single file
+    </Card>
+    <Card
+      title="Server-side rendering"
+      icon="server"
+      href="/scaling-up/server-side-rendering"
+    >
+      Render your application on the server for optimal performance and SEO
+    </Card>
+  </CardGroup>
+</div>
 
-## Create beautiful pages
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Explore the documentation
+    </h2>
+    <p className="text-lg text-gray-600 dark:text-gray-400">
+      Comprehensive guides and API references to help you master Vue
+    </p>
+  </div>
 
-Everything you need to create world-class documentation.
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <a href="/essentials/creating-applications" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#42b983] dark:hover:border-[#42b983] overflow-hidden transition-colors no-underline">
+      <div className="h-32 bg-gradient-to-br from-[#42b983]/10 to-[#35495e]/10 dark:from-[#42b983]/20 dark:to-[#35495e]/20 flex items-center justify-center">
+        <svg className="w-16 h-16 text-[#42b983]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        </svg>
+      </div>
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          Essential guides
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Learn the fundamentals of Vue, from creating applications to advanced component patterns
+        </p>
+        <span className="inline-flex items-center text-sm font-medium text-[#42b983] group-hover:underline">
+          Start learning
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+    <a href="/api/application" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#42b983] dark:hover:border-[#42b983] overflow-hidden transition-colors no-underline">
+      <div className="h-32 bg-gradient-to-br from-[#35495e]/10 to-[#42b983]/10 dark:from-[#35495e]/20 dark:to-[#42b983]/20 flex items-center justify-center">
+        <svg className="w-16 h-16 text-[#35495e] dark:text-[#42b983]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+        </svg>
+      </div>
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          API reference
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Comprehensive API documentation for all Vue functions, components, and directives
+        </p>
+        <span className="inline-flex items-center text-sm font-medium text-[#42b983] group-hover:underline">
+          Browse APIs
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
 
-## Need inspiration?
+    <a href="/components/registration" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#42b983] dark:hover:border-[#42b983] overflow-hidden transition-colors no-underline">
+      <div className="h-32 bg-gradient-to-br from-[#42b983]/10 to-[#1F2D3D]/10 dark:from-[#42b983]/20 dark:to-[#1F2D3D]/20 flex items-center justify-center">
+        <svg className="w-16 h-16 text-[#42b983]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+      </div>
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          Component deep dive
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Master Vue components with in-depth guides on props, events, slots, and more
+        </p>
+        <span className="inline-flex items-center text-sm font-medium text-[#42b983] group-hover:underline">
+          Explore components
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+    <a href="/scaling-up/single-file-components" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#42b983] dark:hover:border-[#42b983] overflow-hidden transition-colors no-underline">
+      <div className="h-32 bg-gradient-to-br from-[#1F2D3D]/10 to-[#42b983]/10 dark:from-[#1F2D3D]/20 dark:to-[#42b983]/20 flex items-center justify-center">
+        <svg className="w-16 h-16 text-[#35495e] dark:text-[#42b983]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+        </svg>
+      </div>
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          Scaling up
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Build production-ready applications with tooling, routing, state management, and SSR
+        </p>
+        <span className="inline-flex items-center text-sm font-medium text-[#42b983] group-hover:underline">
+          Scale your app
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+  </div>
+</div>
+
+<div className="mt-20 mb-16 max-w-5xl mx-auto px-6">
+  <div className="rounded-2xl bg-gradient-to-br from-[#42b983] to-[#35495e] dark:from-[#42b983] dark:to-[#2c3e50] p-12 text-center">
+    <h2 className="text-3xl font-bold text-white mb-4">
+      Ready to build something amazing?
+    </h2>
+    <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
+      Join millions of developers building modern web applications with Vue
+    </p>
+    <a 
+      href="/quickstart" 
+      className="inline-flex items-center px-8 py-3.5 bg-white text-[#42b983] rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors no-underline"
+    >
+      Get Started Now
+    </a>
+  </div>
+</div>

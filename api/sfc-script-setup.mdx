@@ -1,0 +1,527 @@
+---
+title: <script setup>
+description: Complete reference for Vue 3's <script setup> syntax sugar for Composition API
+---
+
+# `<script setup>`
+
+`<script setup>` is a compile-time syntactic sugar for using Composition API inside Single-File Components (SFCs).
+
+## Basic Syntax
+
+```vue
+<script setup>
+import { ref } from 'vue'
+
+const count = ref(0)
+const increment = () => count.value++
+</script>
+
+<template>
+  <button @click="increment">{{ count }}</button>
+</template>
+```
+
+## Key Features
+
+### Top-Level Bindings Auto-Exposure
+
+All top-level bindings (variables, functions, imports) are automatically exposed to the template:
+
+```vue
+<script setup>
+import { computed, ref } from 'vue'
+import MyComponent from './MyComponent.vue'
+
+const count = ref(0)
+const doubled = computed(() => count.value * 2)
+
+function increment() {
+  count.value++
+}
+</script>
+
+<template>
+  <!-- All available in template -->
+  <MyComponent />
+  <div @click="increment">{{ count }} x 2 = {{ doubled }}</div>
+</template>
+```
+
+### Automatic Ref Unwrapping
+
+Refs are automatically unwrapped in templates (no need for `.value`):
+
+```vue
+<script setup>
+import { ref } from 'vue'
+
+const count = ref(0)
+// In script, use .value
+console.log(count.value)
+</script>
+
+<template>
+  <!-- In template, automatic unwrap -->
+  <div>{{ count }}</div>
+</template>
+```
+
+### Top-Level Await
+
+`<script setup>` supports top-level `await`. The component will be set up as an async dependency:
+
+```vue
+<script setup>
+const res = await fetch('/api/data')
+const data = await res.json()
+
+// Context is preserved across await expressions
+const instance = getCurrentInstance()
+await someAsyncOperation()
+// instance is still valid
+</script>
+```
+
+The parent component can handle this with `Suspense`:
+
+```vue
+<template>
+  <Suspense>
+    <AsyncComponent />
+  </Suspense>
+</template>
+```
+
+## Compiler Macros
+
+These macros are globally available without imports and are compiled away:
+
+### defineProps()
+
+Declare component props:
+
+```vue
+<script setup>
+// Runtime declaration
+const props = defineProps({
+  title: String,
+  count: { type: Number, default: 0 }
+})
+
+// Type-based declaration (TypeScript)
+const props = defineProps<{
+  title?: string
+  count?: number
+}>()
+
+// With default values for type-based declaration
+const props = withDefaults(defineProps<{
+  title?: string
+  count?: number
+}>(), {
+  title: 'Hello',
+  count: 0
+})
+</script>
+```
+
+#### Props Destructure (Vue 3.5+)
+
+Destructure props while maintaining reactivity:
+
+```vue
+<script setup>
+const { title, count = 0 } = defineProps<{
+  title: string
+  count?: number
+}>()
+
+// title and count are reactive
+watchEffect(() => {
+  console.log(title, count)
+})
+</script>
+```
+
+Destructured props:
+- Are transformed to maintain reactivity
+- Support default values in destructuring
+- Can be used directly in reactive APIs
+- Are compiled to efficient code
+
+### defineEmits()
+
+Declare component events:
+
+```vue
+<script setup>
+// Runtime declaration
+const emit = defineEmits(['update', 'delete'])
+
+// Type-based declaration
+const emit = defineEmits<{
+  update: [id: number, value: string]
+  delete: [id: number]
+}>()
+
+// Or using call signature syntax
+const emit = defineEmits<{
+  (e: 'update', id: number, value: string): void
+  (e: 'delete', id: number): void
+}>()
+
+// Usage
+emit('update', 1, 'new value')
+</script>
+```
+
+### defineExpose()
+
+Explicitly expose properties to parent via template refs:
+
+```vue
+<script setup>
+import { ref } from 'vue'
+
+const count = ref(0)
+const increment = () => count.value++
+
+// Only exposed properties are accessible via ref
+defineExpose({
+  count,
+  increment
+})
+</script>
+```
+
+Parent usage:
+
+```vue
+<script setup>
+import { ref, onMounted } from 'vue'
+import Child from './Child.vue'
+
+const childRef = ref()
+
+onMounted(() => {
+  childRef.value.increment()
+  console.log(childRef.value.count)
+})
+</script>
+
+<template>
+  <Child ref="childRef" />
+</template>
+```
+
+### defineModel()
+
+Declare two-way binding props (Vue 3.4+):
+
+```vue
+<script setup>
+// Basic usage
+const modelValue = defineModel()
+
+// With options
+const modelValue = defineModel({ type: String, required: true })
+
+// Named models
+const title = defineModel('title', { type: String })
+const content = defineModel('content', { type: String })
+
+// TypeScript
+const modelValue = defineModel<string>()
+</script>
+
+<template>
+  <input v-model="modelValue" />
+</template>
+```
+
+Compiles to a prop + emit pair:
+
+```js
+// Equivalent to:
+const props = defineProps(['modelValue'])
+const emit = defineEmits(['update:modelValue'])
+
+const modelValue = computed({
+  get: () => props.modelValue,
+  set: (value) => emit('update:modelValue', value)
+})
+```
+
+### defineSlots()
+
+Type-check and get IntelliSense for slots (TypeScript only):
+
+```vue
+<script setup lang="ts">
+const slots = defineSlots<{
+  default(props: { msg: string }): any
+  footer(): any
+}>()
+</script>
+
+<template>
+  <div>
+    <slot :msg="hello" />
+    <slot name="footer" />
+  </div>
+</template>
+```
+
+### defineOptions()
+
+Define component options that can't be expressed in `<script setup>`:
+
+```vue
+<script setup>
+defineOptions({
+  name: 'CustomName',
+  inheritAttrs: false,
+  customOptions: {
+    /* ... */
+  }
+})
+</script>
+```
+
+## TypeScript Support
+
+### Generic Components
+
+Define generic type parameters:
+
+```vue
+<script setup lang="ts" generic="T">
+defineProps<{
+  items: T[]
+  selected: T
+}>()
+</script>
+```
+
+Multiple generic parameters:
+
+```vue
+<script setup lang="ts" generic="T extends string | number, U extends Item">
+defineProps<{
+  id: T
+  item: U
+}>()
+</script>
+```
+
+### Type-Only Props
+
+Import types for props:
+
+```vue
+<script setup lang="ts">
+import type { PropType } from 'vue'
+import type { Book } from './types'
+
+defineProps<{
+  book: Book
+  callback: (id: number) => void
+}>()
+</script>
+```
+
+The compiler will:
+- Extract runtime prop types for type-based declarations
+- Support imported types from external files
+- Maintain type safety throughout the component
+
+## Usage with Normal `<script>`
+
+Combine with a normal `<script>` block for:
+- Options not expressible in `<script setup>` (e.g., plugins)
+- Named exports
+- Side effects that run once
+
+```vue
+<script>
+// Runs only once on module initialization
+export const someExport = 'exported value'
+
+export default {
+  inheritAttrs: false
+}
+</script>
+
+<script setup>
+// Runs for each component instance
+import { ref } from 'vue'
+const count = ref(0)
+</script>
+```
+
+## Restrictions
+
+### Cannot Use `src`
+
+`<script setup>` cannot use the `src` attribute:
+
+```vue
+<!-- ❌ Not allowed -->
+<script setup src="./setup.js"></script>
+```
+
+Reason: Syntax would be ambiguous outside component context.
+
+### No Default Export
+
+Do not use default export in `<script setup>`:
+
+```vue
+<script setup>
+// ❌ Not allowed
+export default {
+  // ...
+}
+</script>
+```
+
+Use `defineOptions()` instead for component options.
+
+### Script Position
+
+When used with normal `<script>`, `<script setup>` should come after:
+
+```vue
+<script>
+// normal script
+</script>
+
+<script setup>
+// setup script
+</script>
+```
+
+## Build Optimizations
+
+### Static Hoisting
+
+Static content is automatically hoisted outside the render function:
+
+```vue
+<script setup>
+import { ref } from 'vue'
+
+const count = ref(0)
+
+// Static constants are hoisted
+const STATIC_TEXT = 'Hello'
+const STATIC_CONFIG = { max: 100 }
+</script>
+```
+
+### Tree-Shaking
+
+Unused imports are automatically tree-shaken:
+
+```vue
+<script setup>
+import { ref, computed, watch } from 'vue'
+
+const count = ref(0)
+// computed and watch are not used
+// They will be removed in production build
+</script>
+
+<template>
+  <div>{{ count }}</div>
+</template>
+```
+
+### Import Usage Check
+
+For TypeScript SFCs, imports are checked for template usage:
+- Type-only imports not used in template are preserved
+- Component imports not used in template are removed
+- This enables HMR optimization
+
+## Compilation Output
+
+A `<script setup>` component:
+
+```vue
+<script setup>
+import { ref } from 'vue'
+
+const count = ref(0)
+const increment = () => count.value++
+</script>
+```
+
+Compiles roughly to:
+
+```js
+import { defineComponent, ref } from 'vue'
+
+export default defineComponent({
+  setup() {
+    const count = ref(0)
+    const increment = () => count.value++
+    
+    return {
+      count,
+      increment
+    }
+  }
+})
+```
+
+## API Reference
+
+### compileScript()
+
+Compiles the script blocks of an SFC:
+
+```ts
+function compileScript(
+  sfc: SFCDescriptor,
+  options: SFCScriptCompileOptions
+): SFCScriptBlock
+```
+
+#### SFCScriptCompileOptions
+
+```ts
+interface SFCScriptCompileOptions {
+  id: string
+  isProd?: boolean
+  sourceMap?: boolean
+  babelParserPlugins?: ParserPlugin[]
+  globalTypeFiles?: string[]
+  inlineTemplate?: boolean
+  genDefaultAs?: string
+  templateOptions?: Partial<SFCTemplateCompileOptions>
+  hoistStatic?: boolean
+  propsDestructure?: boolean | 'error'
+  fs?: FileSystemAPI
+  customElement?: boolean | ((filename: string) => boolean)
+}
+```
+
+### Macro Constants
+
+```ts
+export const DEFINE_PROPS = 'defineProps'
+export const DEFINE_EMITS = 'defineEmits'
+export const DEFINE_EXPOSE = 'defineExpose'
+export const DEFINE_OPTIONS = 'defineOptions'
+export const DEFINE_SLOTS = 'defineSlots'
+export const DEFINE_MODEL = 'defineModel'
+export const WITH_DEFAULTS = 'withDefaults'
+```
+
+## See Also
+
+- [SFC Syntax Specification](/api/sfc-spec)
+- [SFC CSS Features](/api/sfc-css-features)
+- [Compile-Time Flags](/api/compile-time-flags)

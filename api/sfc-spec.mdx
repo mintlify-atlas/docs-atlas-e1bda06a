@@ -1,0 +1,368 @@
+---
+title: SFC Syntax Specification
+description: Complete specification for Vue Single-File Component syntax and structure
+---
+
+# SFC Syntax Specification
+
+This page documents the complete syntax specification for Vue Single-File Components (SFCs).
+
+## Basic Structure
+
+A Vue SFC is a custom file format using `.vue` extension that encapsulates a component's template, logic, and styling:
+
+```vue
+<template>
+  <div class="example">{{ msg }}</div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      msg: 'Hello world!'
+    }
+  }
+}
+</script>
+
+<style>
+.example {
+  color: red;
+}
+</style>
+```
+
+## Language Blocks
+
+### `<template>`
+
+Defines the component's template markup.
+
+**Attributes:**
+
+- `lang` - Template language (e.g., `html`, `pug`, `jade`)
+- `src` - Import template from external file
+
+**Rules:**
+
+- Each SFC can contain at most one `<template>` block
+- Content is extracted and passed to `@vue/compiler-dom` and compiled into render functions
+- Supports all standard Vue template syntax
+
+**Example:**
+
+```vue
+<template lang="pug">
+div.example
+  p {{ msg }}
+</template>
+```
+
+### `<script>`
+
+Defines the component's logic using standard JavaScript or TypeScript.
+
+**Attributes:**
+
+- `lang` - Script language (e.g., `js`, `ts`, `jsx`, `tsx`)
+- `src` - Import script from external file
+- `setup` - Declares as `<script setup>` (see [SFC Script Setup](/api/sfc-script-setup))
+
+**Rules:**
+
+- Each SFC can contain at most one `<script>` block (excluding `<script setup>`)
+- Can coexist with `<script setup>` in the same component
+- Must export component definition as default export (unless using `<script setup>`)
+
+**Example:**
+
+```vue
+<script lang="ts">
+import { defineComponent } from 'vue'
+
+export default defineComponent({
+  data() {
+    return {
+      msg: 'Hello!'
+    }
+  }
+})
+</script>
+```
+
+### `<script setup>`
+
+A compile-time syntactic sugar for using Composition API inside SFCs.
+
+**Attributes:**
+
+- `lang` - Script language (e.g., `ts`, `tsx`)
+- `generic` - Declare generic type parameters
+
+**Rules:**
+
+- Each SFC can contain at most one `<script setup>` block
+- Cannot use `src` attribute (syntax would be ambiguous)
+- Top-level bindings are automatically exposed to template
+- Macros like `defineProps()`, `defineEmits()` available without imports
+
+See [SFC Script Setup](/api/sfc-script-setup) for complete documentation.
+
+**Example:**
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const msg = ref('Hello!')
+</script>
+```
+
+### `<style>`
+
+Defines component styles.
+
+**Attributes:**
+
+- `lang` - Preprocessor language (e.g., `css`, `scss`, `sass`, `less`, `stylus`, `postcss`)
+- `scoped` - Apply styles to current component only
+- `module` - Enable CSS Modules (can be boolean or string for custom inject name)
+- `src` - Import styles from external file
+
+**Rules:**
+
+- Multiple `<style>` tags are supported
+- Can mix scoped and non-scoped styles
+- Scoped styles apply via PostCSS transformation
+
+See [SFC CSS Features](/api/sfc-css-features) for advanced CSS features.
+
+**Example:**
+
+```vue
+<style scoped lang="scss">
+.example {
+  color: v-bind(color);
+  
+  &:hover {
+    opacity: 0.8;
+  }
+}
+</style>
+```
+
+### Custom Blocks
+
+Project-specific custom blocks can be included in SFCs:
+
+```vue
+<custom-block>
+  Custom block content
+</custom-block>
+```
+
+Custom blocks are processed by build tool plugins (e.g., `vite-plugin-vue`).
+
+## Source Imports
+
+All language blocks support the `src` attribute to import content from external files:
+
+```vue
+<template src="./template"></template>
+<script src="./script.js"></script>
+<style src="./style.css"></style>
+```
+
+**Rules:**
+
+- Uses webpack module request syntax
+- Supports relative paths (`./ ../`) and npm packages
+- Cannot be used on `<script setup>` (syntax ambiguity)
+- If both `<script>` and `<script setup>` present, neither can use `src`
+
+## Preprocessors
+
+Preprocessors are enabled via the `lang` attribute:
+
+### TypeScript
+
+```vue
+<script lang="ts">
+import { defineComponent } from 'vue'
+
+export default defineComponent({
+  // type-safe component options
+})
+</script>
+```
+
+### Pug
+
+```vue
+<template lang="pug">
+div
+  h1 Hello {{ name }}
+  p Welcome to Vue
+</template>
+```
+
+### Sass/SCSS
+
+```vue
+<style lang="scss">
+$primary-color: #42b883;
+
+.example {
+  color: $primary-color;
+}
+</style>
+```
+
+## Comments
+
+Inside each block, use comment syntax of that language:
+
+```vue
+<template>
+  <!-- HTML comment -->
+  <div>{{ msg }}</div>
+</template>
+
+<script>
+// JavaScript comment
+/* Multi-line comment */
+</script>
+
+<style>
+/* CSS comment */
+</style>
+```
+
+## Parsing Behavior
+
+### parseMode: 'sfc'
+
+The compiler parses SFCs with `parseMode: 'sfc'`:
+
+- Top-level tags are treated as language blocks
+- Only one `<template>`, one `<script>`, and one `<script setup>` allowed
+- Multiple `<style>` and custom blocks allowed
+- Empty blocks are ignored (except `<template>`)
+
+### Error Handling
+
+The parser will error when:
+
+- No `<template>` or `<script>` present
+- Duplicate `<template>`, `<script>`, or `<script setup>` blocks
+- `<script setup>` uses `src` attribute
+- Both `<script>` and `<script setup>` present, and `<script>` uses `src`
+
+## Functional Components
+
+Vue 2's `<template functional>` is deprecated:
+
+```vue
+<!-- ❌ Not supported in Vue 3 -->
+<template functional>
+  <div>{{ props.msg }}</div>
+</template>
+```
+
+Use regular components or `<script setup>` instead, as functional components no longer have significant performance benefits in Vue 3.
+
+## API Reference
+
+### parse()
+
+Parses a raw `.vue` file into a descriptor:
+
+```ts
+function parse(
+  source: string,
+  options?: SFCParseOptions
+): SFCParseResult
+```
+
+#### SFCParseOptions
+
+```ts
+interface SFCParseOptions {
+  filename?: string
+  sourceMap?: boolean
+  sourceRoot?: string
+  pad?: boolean | 'line' | 'space'
+  ignoreEmpty?: boolean
+  compiler?: TemplateCompiler
+  templateParseOptions?: ParserOptions
+}
+```
+
+#### SFCParseResult
+
+```ts
+interface SFCParseResult {
+  descriptor: SFCDescriptor
+  errors: (CompilerError | SyntaxError)[]
+}
+```
+
+#### SFCDescriptor
+
+```ts
+interface SFCDescriptor {
+  filename: string
+  source: string
+  template: SFCTemplateBlock | null
+  script: SFCScriptBlock | null
+  scriptSetup: SFCScriptBlock | null
+  styles: SFCStyleBlock[]
+  customBlocks: SFCBlock[]
+  cssVars: string[]
+  slotted: boolean
+  shouldForceReload: (prevImports: Record<string, ImportBinding>) => boolean
+}
+```
+
+#### Block Types
+
+```ts
+interface SFCBlock {
+  type: string
+  content: string
+  attrs: Record<string, string | true>
+  loc: SourceLocation
+  map?: RawSourceMap
+  lang?: string
+  src?: string
+}
+
+interface SFCTemplateBlock extends SFCBlock {
+  type: 'template'
+  ast?: RootNode
+}
+
+interface SFCScriptBlock extends SFCBlock {
+  type: 'script'
+  setup?: string | boolean
+  bindings?: BindingMetadata
+  imports?: Record<string, ImportBinding>
+  scriptAst?: Statement[]
+  scriptSetupAst?: Statement[]
+  warnings?: string[]
+  deps?: string[]
+}
+
+interface SFCStyleBlock extends SFCBlock {
+  type: 'style'
+  scoped?: boolean
+  module?: string | boolean
+}
+```
+
+## See Also
+
+- [SFC Script Setup](/api/sfc-script-setup)
+- [SFC CSS Features](/api/sfc-css-features)
+- [Compile-Time Flags](/api/compile-time-flags)

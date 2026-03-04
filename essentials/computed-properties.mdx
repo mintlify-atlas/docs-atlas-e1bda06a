@@ -1,0 +1,430 @@
+---
+title: Computed Properties
+description: Learn how to create derived reactive state using computed() from Vue's reactivity system.
+---
+
+Computed properties are reactive values that are derived from other reactive state. They are cached and only re-evaluated when their dependencies change.
+
+## Basic Computed Property
+
+The `computed()` function from `packages/reactivity/src/computed.ts:189-221` creates a reactive computed value:
+
+```vue
+<template>
+  <div>
+    <p>Count: {{ count }}</p>
+    <p>Double: {{ doubled }}</p>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+
+const count = ref(1)
+
+// Computed property
+const doubled = computed(() => count.value * 2)
+
+console.log(doubled.value) // 2
+
+count.value = 2
+console.log(doubled.value) // 4
+</script>
+```
+
+## API Signature
+
+### Read-only Computed
+
+<ParamField path="getter" type="ComputedGetter<T>" required>
+  A function that returns the computed value
+</ParamField>
+
+<ParamField path="debugOptions" type="DebuggerOptions">
+  Optional debugging options with `onTrack` and `onTrigger` callbacks
+</ParamField>
+
+<ParamField path="return" type="ComputedRef<T>">
+  A readonly reactive ref with a computed value
+</ParamField>
+
+```typescript
+type ComputedGetter<T> = (oldValue?: T) => T
+
+function computed<T>(
+  getter: ComputedGetter<T>,
+  debugOptions?: DebuggerOptions
+): ComputedRef<T>
+```
+
+### Writable Computed
+
+<ParamField path="options" type="WritableComputedOptions<T, S>" required>
+  An object with `get` and `set` functions
+</ParamField>
+
+```typescript
+interface WritableComputedOptions<T, S = T> {
+  get: ComputedGetter<T>
+  set: ComputedSetter<S>
+}
+
+type ComputedSetter<T> = (newValue: T) => void
+
+function computed<T, S = T>(
+  options: WritableComputedOptions<T, S>,
+  debugOptions?: DebuggerOptions
+): WritableComputedRef<T, S>
+```
+
+## How Computed Works
+
+From `packages/reactivity/src/computed.ts:47-154`, the `ComputedRefImpl` class:
+
+```typescript
+class ComputedRefImpl<T = any> implements Subscriber {
+  _value: any = undefined
+  readonly dep: Dep = new Dep(this)
+  readonly __v_isRef = true
+  readonly __v_isReadonly: boolean
+  
+  deps?: Link = undefined
+  depsTail?: Link = undefined
+  flags: EffectFlags = EffectFlags.DIRTY
+  globalVersion: number = globalVersion - 1
+
+  constructor(
+    public fn: ComputedGetter<T>,
+    private readonly setter: ComputedSetter<T> | undefined,
+    isSSR: boolean
+  ) {
+    this.__v_isReadonly = !setter
+    this.isSSR = isSSR
+  }
+
+  get value(): T {
+    const link = this.dep.track() // Track dependencies
+    refreshComputed(this) // Re-evaluate if needed
+    if (link) {
+      link.version = this.dep.version
+    }
+    return this._value
+  }
+
+  set value(newValue) {
+    if (this.setter) {
+      this.setter(newValue)
+    } else if (__DEV__) {
+      warn('Write operation failed: computed value is readonly')
+    }
+  }
+}
+```
+
+<Note>
+  Computed properties are lazy - they only re-evaluate when accessed and their dependencies have changed. This is more efficient than using a method that runs on every render.
+</Note>
+
+## Writable Computed Properties
+
+You can create a computed property with both getter and setter:
+
+```vue
+<template>
+  <div>
+    <p>First name: {{ firstName }}</p>
+    <p>Last name: {{ lastName }}</p>
+    <p>Full name: {{ fullName }}</p>
+    <button @click="fullName = 'John Doe'">Set Full Name</button>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+
+const firstName = ref('John')
+const lastName = ref('Smith')
+
+const fullName = computed({
+  // getter
+  get: () => `${firstName.value} ${lastName.value}`,
+  // setter
+  set: (newValue) => {
+    const names = newValue.split(' ')
+    firstName.value = names[0]
+    lastName.value = names[names.length - 1]
+  }
+})
+</script>
+```
+
+## Computed vs Methods
+
+<CodeGroup>
+```vue Computed Property
+<template>
+  <div>
+    <!-- Cached, only re-evaluates when count changes -->
+    <p>{{ doubled }}</p>
+    <p>{{ doubled }}</p>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+
+const count = ref(1)
+const doubled = computed(() => {
+  console.log('Computing...')
+  return count.value * 2
+})
+// "Computing..." logs only once per count change
+</script>
+```
+
+```vue Method
+<template>
+  <div>
+    <!-- Re-runs on every render -->
+    <p>{{ double() }}</p>
+    <p>{{ double() }}</p>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const count = ref(1)
+function double() {
+  console.log('Computing...')
+  return count.value * 2
+}
+// "Computing..." logs twice per render
+</script>
+```
+</CodeGroup>
+
+<Tip>
+  **When to use computed vs methods:**
+  - Use computed for derived state that depends on reactive data
+  - Use methods for operations with side effects or that don't depend on reactive data
+  - Computed properties are cached, methods always re-run
+</Tip>
+
+## Computed Property Caching
+
+Computed properties are cached based on their reactive dependencies:
+
+```vue
+<script setup>
+import { ref, computed } from 'vue'
+
+const count = ref(1)
+
+// Cached - depends on reactive count
+const doubled = computed(() => count.value * 2)
+
+// NOT cached - depends on Date.now() which is not reactive
+const now = computed(() => Date.now())
+</script>
+```
+
+<Warning>
+  Computed properties that depend on non-reactive values (like `Date.now()`) will not update automatically. For such cases, use a method or a watcher instead.
+</Warning>
+
+## Complex Computed Examples
+
+### Filtering a List
+
+```vue
+<template>
+  <div>
+    <input v-model="searchQuery" placeholder="Search..." />
+    <ul>
+      <li v-for="item in filteredItems" :key="item.id">
+        {{ item.name }}
+      </li>
+    </ul>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+
+const searchQuery = ref('')
+const items = ref([
+  { id: 1, name: 'Apple' },
+  { id: 2, name: 'Banana' },
+  { id: 3, name: 'Cherry' }
+])
+
+const filteredItems = computed(() => {
+  return items.value.filter(item =>
+    item.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+  )
+})
+</script>
+```
+
+### Sorting Data
+
+```vue
+<script setup>
+import { ref, computed } from 'vue'
+
+const users = ref([
+  { id: 1, name: 'John', age: 30 },
+  { id: 2, name: 'Jane', age: 25 },
+  { id: 3, name: 'Bob', age: 35 }
+])
+
+const sortBy = ref('name')
+const sortOrder = ref('asc')
+
+const sortedUsers = computed(() => {
+  return [...users.value].sort((a, b) => {
+    const modifier = sortOrder.value === 'asc' ? 1 : -1
+    if (a[sortBy.value] < b[sortBy.value]) return -1 * modifier
+    if (a[sortBy.value] > b[sortBy.value]) return 1 * modifier
+    return 0
+  })
+})
+</script>
+```
+
+### Composing Multiple Computed Properties
+
+```vue
+<script setup>
+import { ref, computed } from 'vue'
+
+const firstName = ref('John')
+const lastName = ref('Doe')
+const age = ref(30)
+
+const fullName = computed(() => `${firstName.value} ${lastName.value}`)
+
+const greeting = computed(() => `Hello, ${fullName.value}!`)
+
+const profile = computed(() => ({
+  name: fullName.value,
+  age: age.value,
+  isAdult: age.value >= 18,
+  greeting: greeting.value
+}))
+</script>
+```
+
+## Computed Debugging
+
+Vue provides debugging hooks for computed properties:
+
+```vue
+<script setup>
+import { ref, computed } from 'vue'
+
+const count = ref(0)
+
+const doubled = computed(
+  () => count.value * 2,
+  {
+    onTrack(e) {
+      console.log('Tracked:', e)
+    },
+    onTrigger(e) {
+      console.log('Triggered:', e)
+    }
+  }
+)
+</script>
+```
+
+<Note>
+  Debug hooks only work in development mode and should be removed in production builds.
+</Note>
+
+## Best Practices
+
+<Steps>
+  <Step title="Keep computed getters pure">
+    Computed getters should not have side effects. Don't modify other state, make async requests, or mutate the DOM inside a computed getter.
+    
+    ```typescript
+    // Bad - has side effects
+    const doubled = computed(() => {
+      count.value++ // Don't mutate other state!
+      return count.value * 2
+    })
+    
+    // Good - pure function
+    const doubled = computed(() => count.value * 2)
+    ```
+  </Step>
+
+  <Step title="Avoid mutating computed return values">
+    The value returned from a computed property is derived state. Think of it as a temporary snapshot - don't mutate it directly.
+    
+    ```typescript
+    // Bad - mutating computed value
+    const items = computed(() => [1, 2, 3])
+    items.value.push(4) // Don't mutate!
+    
+    // Good - create a new ref if you need to mutate
+    const mutableItems = ref([...items.value])
+    mutableItems.value.push(4)
+    ```
+  </Step>
+
+  <Step title="Use computed for expensive operations">
+    If you have expensive data transformations, use computed properties to cache the results.
+    
+    ```typescript
+    // Expensive operation - cache it!
+    const expensiveResult = computed(() => {
+      return items.value
+        .map(heavy_transformation)
+        .filter(complex_filter)
+        .sort(expensive_comparator)
+    })
+    ```
+  </Step>
+</Steps>
+
+## Computed in runtime-core
+
+The `computed` exported from `vue` is enhanced in `packages/runtime-core/src/apiComputed.ts:4-17`:
+
+```typescript
+export const computed: typeof _computed = (
+  getterOrOptions: any,
+  debugOptions?: any,
+) => {
+  const c = _computed(getterOrOptions, debugOptions, isInSSRComponentSetup)
+  if (__DEV__) {
+    const i = getCurrentInstance()
+    if (i && i.appContext.config.warnRecursiveComputed) {
+      (c as unknown as ComputedRefImpl<any>)._warnRecursive = true
+    }
+  }
+  return c as any
+}
+```
+
+This adds SSR support and recursive computed warnings in development mode.
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Reactivity Fundamentals" icon="bolt" href="/essentials/reactivity-fundamentals">
+    Learn about ref() and reactive()
+  </Card>
+  
+  <Card title="Watchers" icon="eye" href="/essentials/watchers">
+    React to data changes with watch()
+  </Card>
+  
+  <Card title="Lifecycle Hooks" icon="clock" href="/essentials/lifecycle-hooks">
+    Execute code at specific lifecycle stages
+  </Card>
+</CardGroup>

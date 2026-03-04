@@ -1,0 +1,581 @@
+---
+title: Composition API Helpers
+---
+
+Helper functions for accessing component context and managing component state in the Composition API.
+
+## useSlots()
+
+Returns the slots object from the setup context.
+
+**Type Signature:**
+```ts
+function useSlots(): SetupContext['slots']
+```
+
+### Returns
+
+The slots object with the same structure as `$slots` in the Options API.
+
+### Example
+
+```vue
+<script setup>
+import { useSlots } from 'vue'
+
+const slots = useSlots()
+
+// Check if a slot exists
+if (slots.header) {
+  console.log('Header slot provided')
+}
+
+// Get slot names
+const slotNames = Object.keys(slots)
+
+// Call a slot programmatically
+const defaultSlot = slots.default?.()
+</script>
+
+<template>
+  <div>
+    <slot name="header" />
+    <slot />
+  </div>
+</template>
+```
+
+### Usage Notes
+
+- Only available in `setup()` or `<script setup>`
+- Returns a reactive object
+- Slots are functions that return VNodes when called
+- Useful for advanced slot manipulation
+
+### Checking Slot Presence
+
+```js
+import { useSlots } from 'vue'
+
+const slots = useSlots()
+
+// Check if default slot has content
+const hasDefaultSlot = !!slots.default
+
+// Check named slots
+const hasHeader = !!slots.header
+```
+
+<Warning>
+Must be called inside `setup()` or `<script setup>`. Cannot be called in async functions after an `await` statement.
+</Warning>
+
+---
+
+## useAttrs()
+
+Returns the attrs object from the setup context.
+
+**Type Signature:**
+```ts
+function useAttrs(): SetupContext['attrs']
+```
+
+### Returns
+
+The fallthrough attributes object with the same structure as `$attrs` in the Options API.
+
+### Example
+
+```vue
+<script setup>
+import { useAttrs } from 'vue'
+
+const attrs = useAttrs()
+
+// Access attributes
+console.log(attrs.id)
+console.log(attrs.class)
+
+// Check for specific attributes
+if (attrs.disabled !== undefined) {
+  console.log('Component is disabled')
+}
+</script>
+```
+
+### Fallthrough Attributes
+
+```vue
+<!-- Parent.vue -->
+<MyComponent id="foo" class="bar" data-test="baz" />
+
+<!-- MyComponent.vue -->
+<script setup>
+import { useAttrs } from 'vue'
+
+const attrs = useAttrs()
+
+// attrs = {
+//   id: 'foo',
+//   class: 'bar',
+//   'data-test': 'baz'
+// }
+</script>
+
+<template>
+  <!-- Manually apply attrs -->
+  <div v-bind="attrs">Content</div>
+</template>
+
+<script>
+// Disable automatic attribute inheritance
+export default {
+  inheritAttrs: false
+}
+</script>
+```
+
+### Usage Notes
+
+- Only available in `setup()` or `<script setup>`
+- Returns a reactive object
+- Includes all attributes not declared as props or emits
+- Useful when `inheritAttrs: false` is set
+
+### Common Use Cases
+
+```js
+import { useAttrs } from 'vue'
+
+const attrs = useAttrs()
+
+// Separate class and other attrs
+const { class: className, ...otherAttrs } = attrs
+
+// Apply attrs conditionally
+const wrapperAttrs = computed(() => ({
+  ...attrs,
+  class: ['wrapper', attrs.class]
+}))
+```
+
+<Warning>
+Must be called inside `setup()` or `<script setup>`. Cannot be called in async functions after an `await` statement.
+</Warning>
+
+---
+
+## useModel()
+
+Helper for creating two-way binding with parent components. Used at runtime when not using compiler macros.
+
+**Type Signature:**
+```ts
+function useModel<
+  T extends Record<string, any>,
+  K extends keyof T
+>(
+  props: T,
+  name: K,
+  options?: DefineModelOptions<T[K]>
+): ModelRef<T[K]>
+
+type DefineModelOptions<T = any> = {
+  get?: (v: T) => any
+  set?: (v: any) => any
+}
+```
+
+<ParamField path="props" type="object">
+  The component props object.
+</ParamField>
+
+<ParamField path="name" type="string">
+  The name of the prop to bind. The component must also emit an `update:propName` event.
+</ParamField>
+
+<ParamField path="options" type="DefineModelOptions" optional>
+  Optional transformers:
+  - `get`: Transform value when reading
+  - `set`: Transform value when writing
+</ParamField>
+
+### Example
+
+```vue
+<script setup>
+import { useModel } from 'vue'
+
+const props = defineProps(['modelValue', 'count'])
+const emit = defineEmits(['update:modelValue', 'update:count'])
+
+// Basic usage
+const model = useModel(props, 'modelValue')
+
+// Named model
+const count = useModel(props, 'count')
+
+// Update the model
+model.value = 'new value' // emits 'update:modelValue'
+count.value++ // emits 'update:count'
+</script>
+```
+
+### With Transformers
+
+```vue
+<script setup>
+import { useModel } from 'vue'
+
+const props = defineProps(['modelValue'])
+const emit = defineEmits(['update:modelValue'])
+
+const model = useModel(props, 'modelValue', {
+  // Transform to uppercase when reading
+  get: (val) => val?.toUpperCase(),
+  // Transform to lowercase when writing
+  set: (val) => val?.toLowerCase()
+})
+
+// Reading: model.value returns uppercase
+// Writing: model.value = 'FOO' emits lowercase 'foo'
+</script>
+```
+
+### Usage Notes
+
+- Creates a computed ref that syncs with the parent prop
+- Automatically emits the update event when the ref is modified
+- Handles both controlled (with v-model) and uncontrolled usage
+- The prop must be declared in `defineProps()`
+- The update event must be declared in `defineEmits()`
+
+<Note>
+Prefer using `defineModel()` in `<script setup>` which provides a more convenient API.
+</Note>
+
+---
+
+## useTemplateRef()
+
+Creates a ref that will be populated with the corresponding template element or component instance.
+
+**Type Signature:**
+```ts
+function useTemplateRef<T = unknown>(
+  key: string
+): Readonly<ShallowRef<T | null>>
+
+type TemplateRef<T = unknown> = Readonly<ShallowRef<T | null>>
+```
+
+<ParamField path="key" type="string">
+  The ref name matching the `ref` attribute in the template.
+</ParamField>
+
+### Returns
+
+A readonly shallow ref that will be populated after the component is mounted.
+
+### Example
+
+```vue
+<script setup>
+import { useTemplateRef, onMounted } from 'vue'
+
+// Create a template ref
+const inputRef = useTemplateRef('input')
+
+onMounted(() => {
+  // Access the DOM element after mount
+  inputRef.value?.focus()
+})
+</script>
+
+<template>
+  <input ref="input" type="text" />
+</template>
+```
+
+### With Component Refs
+
+```vue
+<script setup>
+import { useTemplateRef } from 'vue'
+import ChildComponent from './ChildComponent.vue'
+
+const childRef = useTemplateRef('child')
+
+// Access child component instance
+function callChildMethod() {
+  childRef.value?.someMethod()
+}
+</script>
+
+<template>
+  <ChildComponent ref="child" />
+</template>
+```
+
+### With v-for
+
+```vue
+<script setup>
+import { useTemplateRef, onMounted } from 'vue'
+
+const items = ['a', 'b', 'c']
+const itemRefs = useTemplateRef('items')
+
+onMounted(() => {
+  // itemRefs.value is an array of elements
+  console.log(itemRefs.value) // [div, div, div]
+})
+</script>
+
+<template>
+  <div v-for="item in items" :key="item" ref="items">
+    {{ item }}
+  </div>
+</template>
+```
+
+### Usage Notes
+
+- Only available in `setup()` or `<script setup>`
+- Returns a readonly ref to prevent accidental overwrites
+- The ref is populated after the component is mounted
+- The value is `null` before mount and after unmount
+- Use with `onMounted()` or `watchEffect()` to safely access the value
+
+<Warning>
+The returned ref is **readonly**. The value is automatically set by Vue and should not be manually assigned.
+</Warning>
+
+---
+
+## useId()
+
+Generates a unique ID for the current component instance. Useful for accessibility attributes.
+
+**Type Signature:**
+```ts
+function useId(): string
+```
+
+### Returns
+
+A unique string ID in the format `v-${uid}` where uid is unique per component instance.
+
+### Example
+
+```vue
+<script setup>
+import { useId } from 'vue'
+
+const id = useId()
+const inputId = `${id}-input`
+const labelId = `${id}-label`
+</script>
+
+<template>
+  <div>
+    <label :id="labelId" :for="inputId">Name</label>
+    <input :id="inputId" :aria-labelledby="labelId" type="text" />
+  </div>
+</template>
+```
+
+### Multiple IDs in One Component
+
+```vue
+<script setup>
+import { useId } from 'vue'
+
+const baseId = useId()
+const formIds = {
+  name: `${baseId}-name`,
+  email: `${baseId}-email`,
+  message: `${baseId}-message`
+}
+</script>
+
+<template>
+  <form>
+    <input :id="formIds.name" type="text" />
+    <input :id="formIds.email" type="email" />
+    <textarea :id="formIds.message" />
+  </form>
+</template>
+```
+
+### SSR-Safe IDs
+
+```vue
+<script setup>
+import { useId } from 'vue'
+
+// The ID is stable across server and client
+const id = useId()
+
+// Safe for SSR - no hydration mismatch
+</script>
+
+<template>
+  <div :id="id">Content</div>
+</template>
+```
+
+### Usage Notes
+
+- Only available in `setup()` or `<script setup>`
+- Generates a stable ID that's consistent across SSR and client hydration
+- Each call to `useId()` returns the same ID for a given component instance
+- IDs are unique across different component instances
+- The prefix can be customized via `app.config.idPrefix`
+
+### Customizing ID Prefix
+
+```js
+import { createApp } from 'vue'
+
+const app = createApp(App)
+
+// Customize the ID prefix (default is 'v')
+app.config.idPrefix = 'my-app'
+
+// IDs will now be formatted as 'my-app-{uid}'
+```
+
+### Common Use Cases
+
+```vue
+<script setup>
+import { useId } from 'vue'
+
+const id = useId()
+</script>
+
+<template>
+  <!-- Form label/input association -->
+  <label :for="`${id}-input`">Name</label>
+  <input :id="`${id}-input`" />
+  
+  <!-- ARIA relationships -->
+  <button :aria-describedby="`${id}-desc`">Help</button>
+  <div :id="`${id}-desc`">Description text</div>
+  
+  <!-- Modal dialogs -->
+  <button :aria-controls="`${id}-dialog`">Open</button>
+  <dialog :id="`${id}-dialog`">Content</dialog>
+</template>
+```
+
+<Note>
+`useId()` is particularly useful for building accessible components that need unique IDs for ARIA attributes.
+</Note>
+
+---
+
+## getCurrentInstance()
+
+Returns the current component instance. For advanced use cases only.
+
+**Type Signature:**
+```ts
+function getCurrentInstance(): ComponentInternalInstance | null
+```
+
+### Example
+
+```js
+import { getCurrentInstance } from 'vue'
+
+const instance = getCurrentInstance()
+if (instance) {
+  console.log(instance.proxy) // Component public instance
+  console.log(instance.props) // Props
+  console.log(instance.emit) // Emit function
+}
+```
+
+<Warning>
+This is an **advanced API** intended for library authors. Most applications should not need this. Use the dedicated composition API functions instead.
+</Warning>
+
+### When to Use
+
+- Building plugins or composables that need access to internal instance
+- Advanced integrations with third-party libraries
+- Debugging or development tools
+
+### When NOT to Use
+
+- Regular application code should use dedicated APIs:
+  - Use `useSlots()` instead of `instance.slots`
+  - Use `useAttrs()` instead of `instance.attrs`
+  - Use `inject()` instead of accessing `instance.provides`
+
+---
+
+## Best Practices
+
+### Prefer Dedicated APIs
+
+```js
+// Good: Use dedicated helpers
+import { useSlots, useAttrs } from 'vue'
+const slots = useSlots()
+const attrs = useAttrs()
+
+// Avoid: Using getCurrentInstance for common tasks
+import { getCurrentInstance } from 'vue'
+const instance = getCurrentInstance()
+const slots = instance.slots // Not recommended
+```
+
+### Use defineModel() Over useModel()
+
+```vue
+<!-- Good: Use defineModel() macro -->
+<script setup>
+const model = defineModel()
+</script>
+
+<!-- Avoid: Manual useModel() setup -->
+<script setup>
+const props = defineProps(['modelValue'])
+const emit = defineEmits(['update:modelValue'])
+const model = useModel(props, 'modelValue')
+</script>
+```
+
+### Call Helpers Synchronously
+
+```js
+import { useSlots, useAttrs } from 'vue'
+
+// Good: Called synchronously
+const slots = useSlots()
+const attrs = useAttrs()
+
+// Bad: Called after await
+await someAsyncOperation()
+const slots = useSlots() // May not work correctly
+```
+
+### Use useTemplateRef() for Type Safety
+
+```vue
+<script setup lang="ts">
+import { useTemplateRef } from 'vue'
+
+// Type-safe template ref
+const inputRef = useTemplateRef<HTMLInputElement>('input')
+
+onMounted(() => {
+  // TypeScript knows this is an HTMLInputElement
+  inputRef.value?.focus()
+})
+</script>
+```

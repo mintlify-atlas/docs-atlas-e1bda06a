@@ -1,0 +1,187 @@
+---
+title: Options - Rendering
+---
+
+## template
+
+<ParamField path="template" type="string">
+  A string template to be used as the markup for the component.
+
+  The template will be compiled on-the-fly and used as the `render` function for the component. This is only supported when using a build of Vue that includes the template compiler. The template compiler is **NOT** included in Vue builds that have the word `runtime` in their names, e.g. `vue.runtime.esm-bundler.js`. Consult the [dist file guide](https://github.com/vuejs/core/tree/main/packages/vue#which-dist-file-to-use) for details about different builds.
+
+  If the string starts with `#` it will be used as a `querySelector` and use the selected element's innerHTML as the template string. This allows the source template to be authored using native `<template>` elements.
+
+  If the `render` option is also present in the same component, `template` will be ignored.
+
+  If the root component of your application doesn't have a `template` or `render` option specified, Vue will try to use the innerHTML of the mounted element as the template instead.
+
+  **Security Note:** Only use template sources that you can trust. Do not use user-provided content as your template. See [Security Guide](#security-best-practices#rule-no-1-never-use-non-trusted-templates) for more details.
+
+  **Example:**
+  ```js
+  export default {
+    template: `
+      <div>
+        <h1>{{ title }}</h1>
+        <p>{{ message }}</p>
+      </div>
+    `,
+    data() {
+      return {
+        title: 'Hello',
+        message: 'World'
+      }
+    }
+  }
+  ```
+</ParamField>
+
+## render
+
+<ParamField path="render" type="Function">
+  A function that programmatically returns the virtual DOM tree of the component.
+
+  The `render` function receives the component's reactive state as its first argument. In Options API, this is accessed via the `this` context.
+
+  The second argument provides helper functions for creating VNodes. This is mostly used when writing render functions manually without JSX. If you're using JSX (via Babel plugin or TypeScript), you typically don't need this argument.
+
+  If a `template` option is also present in the component, and the application includes the runtime compiler, `template` will be compiled into a `render` function at runtime and will override any manually provided `render` function. If the build does not include the runtime compiler, `render` takes priority.
+
+  **Example:**
+  ```js
+  import { h } from 'vue'
+
+  export default {
+    data() {
+      return {
+        msg: 'hello'
+      }
+    },
+    render() {
+      return h('div', this.msg)
+    }
+  }
+  ```
+
+  **Example with JSX:**
+  ```jsx
+  export default {
+    data() {
+      return {
+        msg: 'hello'
+      }
+    },
+    render() {
+      return <div>{this.msg}</div>
+    }
+  }
+  ```
+</ParamField>
+
+## compilerOptions
+
+<ParamField path="compilerOptions" type="Object">
+  Configure runtime compiler options for this component's template.
+
+  **Note:** This option is only respected when using the full build (i.e. the standalone `vue.js` that can compile templates in the browser). It is not supported when using the runtime-only build with a build setup.
+
+  Options set at the component level take precedence over app-level `app.config.compilerOptions`.
+
+  See [app.config.compilerOptions](/api/application#app-config-compileroptions) for available options.
+
+  **Example:**
+  ```js
+  export default {
+    template: '<custom-element></custom-element>',
+    compilerOptions: {
+      isCustomElement: (tag) => tag.includes('-')
+    }
+  }
+  ```
+</ParamField>
+
+### compilerOptions.isCustomElement
+
+<ParamField path="compilerOptions.isCustomElement" type="(tag: string) => boolean">
+  Specifies a check method to recognize native custom elements.
+
+  If a tag matches this function, it will be rendered as a native custom element instead of being resolved as a Vue component.
+
+  Native HTML and SVG tags don't need to be matched in this function - Vue's parser recognizes them automatically.
+
+  **Example:**
+  ```js
+  export default {
+    compilerOptions: {
+      isCustomElement: (tag) => tag.startsWith('ion-')
+    }
+  }
+  ```
+</ParamField>
+
+### compilerOptions.whitespace
+
+<ParamField path="compilerOptions.whitespace" type="'condense' | 'preserve'" default="'condense'">
+  Adjusts template whitespace handling behavior.
+
+  - `'condense'`: Remove whitespace characters between elements when they result in a single space, and remove them entirely if they result in an empty text node. This is the default behavior for better performance.
+  
+  - `'preserve'`: Preserve all whitespace characters.
+
+  **Example:**
+  ```js
+  export default {
+    compilerOptions: {
+      whitespace: 'preserve'
+    }
+  }
+  ```
+</ParamField>
+
+### compilerOptions.delimiters
+
+<ParamField path="compilerOptions.delimiters" type="[string, string]" default="['{{', '}}']">
+  Adjusts the delimiters used for text interpolation within the template.
+
+  This is typically used to avoid conflicting with server-side frameworks that also use mustache syntax.
+
+  **Example:**
+  ```js
+  export default {
+    compilerOptions: {
+      delimiters: ['${', '}']
+    },
+    template: '<div>${ message }</div>',
+    data() {
+      return {
+        message: 'Hello'
+      }
+    }
+  }
+  ```
+</ParamField>
+
+### compilerOptions.comments
+
+<ParamField path="compilerOptions.comments" type="boolean" default="false">
+  Adjusts treatment of HTML comments in templates.
+
+  By default, Vue will remove the comments in production. Setting this option to `true` will force Vue to preserve comments even in production. Comments are always preserved during development.
+
+  This option is typically used when Vue is used with other libraries that rely on HTML comments.
+
+  **Example:**
+  ```js
+  export default {
+    template: `
+      <div>
+        <!-- This comment will be preserved -->
+        <p>Content</p>
+      </div>
+    `,
+    compilerOptions: {
+      comments: true
+    }
+  }
+  ```
+</ParamField>

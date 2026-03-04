@@ -1,0 +1,569 @@
+---
+title: SFC CSS Features
+description: Advanced CSS features in Vue Single-File Components including scoped styles, CSS modules, and reactive CSS variables
+---
+
+# SFC CSS Features
+
+Vue SFCs provide advanced CSS features for component-scoped styling and dynamic CSS integration.
+
+## Scoped CSS
+
+Add the `scoped` attribute to automatically scope styles to the current component:
+
+```vue
+<template>
+  <div class="example">Scoped styling</div>
+</template>
+
+<style scoped>
+.example {
+  color: red;
+}
+</style>
+```
+
+### How It Works
+
+The compiler transforms scoped styles using PostCSS:
+
+```html
+<!-- Compiled output -->
+<div class="example" data-v-f3f3eg9>Scoped styling</div>
+
+<style>
+.example[data-v-f3f3eg9] {
+  color: red;
+}
+</style>
+```
+
+Each component instance receives a unique `data-v-*` attribute, and CSS selectors are rewritten to include this attribute.
+
+### Deep Selectors
+
+Use `:deep()` to affect child components:
+
+```vue
+<style scoped>
+.parent {
+  color: red;
+}
+
+/* Affects child components */
+:deep(.child) {
+  color: blue;
+}
+
+/* Compiled to: [data-v-xxx] .child { color: blue; } */
+</style>
+```
+
+Alternative syntax:
+
+```vue
+<style scoped>
+/* All these work the same */
+:deep(.child) { }
+::v-deep(.child) { }
+>>> .child { }        /* deprecated */
+/deep/ .child { }     /* deprecated */
+</style>
+```
+
+### Slotted Selectors
+
+Use `:slotted()` to target slot content:
+
+```vue
+<style scoped>
+/* Target elements passed to default slot */
+:slotted(div) {
+  color: red;
+}
+
+/* Compiled to: div[data-v-xxx-s] { color: red; } */
+</style>
+```
+
+The `-s` suffix indicates slotted content scope.
+
+### Global Selectors
+
+Use `:global()` for global styles within scoped stylesheets:
+
+```vue
+<style scoped>
+/* Scoped style */
+.local {
+  color: red;
+}
+
+/* Global style */
+:global(.global-class) {
+  color: blue;
+}
+
+/* Mixed */
+.local :global(.global-inside) {
+  color: green;
+}
+</style>
+```
+
+### Scoped Animations
+
+Keyframes in scoped styles are automatically scoped:
+
+```vue
+<style scoped>
+.element {
+  animation: fade 1s;
+}
+
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Compiled to: @keyframes fade-f3f3eg9 { ... } */
+</style>
+```
+
+## CSS Modules
+
+Use the `module` attribute to enable CSS Modules:
+
+```vue
+<template>
+  <div :class="$style.red">
+    This should be red
+  </div>
+</template>
+
+<style module>
+.red {
+  color: red;
+}
+</style>
+```
+
+### Custom Inject Name
+
+Name the CSS modules object:
+
+```vue
+<template>
+  <div :class="classes.red">Red text</div>
+</template>
+
+<style module="classes">
+.red {
+  color: red;
+}
+</style>
+```
+
+### Usage in `<script setup>`
+
+Access CSS modules via `useCssModule()`:
+
+```vue
+<script setup>
+import { useCssModule } from 'vue'
+
+// Default CSS module
+const style = useCssModule()
+
+// Named CSS module
+const classes = useCssModule('classes')
+</script>
+
+<template>
+  <div :class="style.red">Red</div>
+  <div :class="classes.blue">Blue</div>
+</template>
+
+<style module>
+.red { color: red; }
+</style>
+
+<style module="classes">
+.blue { color: blue; }
+</style>
+```
+
+### CSS Modules Configuration
+
+Configure CSS Modules via build tools:
+
+```js
+// vite.config.js
+export default {
+  css: {
+    modules: {
+      localsConvention: 'camelCase',
+      generateScopedName: '[name]__[local]___[hash:base64:5]'
+    }
+  }
+}
+```
+
+## CSS `v-bind()`
+
+Bind CSS values to component state:
+
+```vue
+<script setup>
+import { ref } from 'vue'
+
+const color = ref('red')
+const fontSize = ref(14)
+</script>
+
+<template>
+  <div class="text">Dynamic CSS</div>
+</template>
+
+<style scoped>
+.text {
+  /* Reactive CSS variables */
+  color: v-bind(color);
+  font-size: v-bind(fontSize + 'px');
+  
+  /* Using JavaScript expressions */
+  background: v-bind('color === "red" ? "pink" : "lightblue"');
+}
+</style>
+```
+
+### How It Works
+
+The compiler:
+
+1. Extracts `v-bind()` expressions from CSS
+2. Generates hashed CSS variable names
+3. Injects a `useCssVars()` call in the component
+4. Sets CSS variables on the component's root element
+
+```js
+// Compiled output (simplified)
+import { useCssVars } from 'vue'
+
+useCssVars(_ctx => ({
+  '--f3f3eg9-color': _ctx.color,
+  '--f3f3eg9-fontSize': (_ctx.fontSize + 'px')
+}))
+```
+
+```css
+.text {
+  color: var(--f3f3eg9-color);
+  font-size: var(--f3f3eg9-fontSize);
+}
+```
+
+### Quoteless Values
+
+You can omit quotes for simple identifiers:
+
+```vue
+<style scoped>
+.text {
+  /* These are equivalent */
+  color: v-bind(color);
+  color: v-bind('color');
+  
+  /* Complex expressions need quotes */
+  color: v-bind('theme.color');
+  color: v-bind('color.toUpperCase()');
+}
+</style>
+```
+
+### SSR Considerations
+
+In SSR, CSS variables are:
+
+- Inlined into the style attribute
+- Prefixed with `:--` to distinguish from user CSS vars
+- Reset to `initial` to prevent inheritance issues
+
+```html
+<!-- SSR output -->
+<div style=":--f3f3eg9-color:red;" data-v-f3f3eg9>
+  Dynamic CSS
+</div>
+```
+
+## Combining Features
+
+You can use multiple CSS features together:
+
+```vue
+<script setup>
+import { ref } from 'vue'
+
+const theme = ref({
+  primary: '#42b883',
+  secondary: '#35495e'
+})
+</script>
+
+<template>
+  <div :class="$style.container">
+    <div class="header">Header</div>
+    <slot />
+  </div>
+</template>
+
+<style scoped>
+/* Scoped styles */
+.header {
+  color: v-bind('theme.primary');
+  padding: 1rem;
+}
+
+/* Deep selector with CSS variables */
+:deep(.child) {
+  border-color: v-bind('theme.secondary');
+}
+
+/* Slotted content */
+:slotted(p) {
+  margin: 0;
+}
+</style>
+
+<style module>
+/* CSS Modules */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+</style>
+
+<style>
+/* Global styles */
+:global(body) {
+  margin: 0;
+  padding: 0;
+}
+</style>
+```
+
+## Preprocessor Support
+
+All CSS features work with preprocessors:
+
+```vue
+<style scoped lang="scss">
+$primary: #42b883;
+
+.container {
+  color: $primary;
+  
+  &:hover {
+    color: darken($primary, 10%);
+  }
+  
+  // Deep selector with SCSS nesting
+  :deep(.child) {
+    background: lighten($primary, 40%);
+  }
+}
+
+// CSS variables with SCSS
+.dynamic {
+  color: v-bind(userColor);
+  
+  @media (prefers-color-scheme: dark) {
+    filter: brightness(0.8);
+  }
+}
+</style>
+```
+
+## API Reference
+
+### compileStyle()
+
+Compiles a single style block:
+
+```ts
+function compileStyle(
+  options: SFCStyleCompileOptions
+): SFCStyleCompileResults
+```
+
+#### SFCStyleCompileOptions
+
+```ts
+interface SFCStyleCompileOptions {
+  source: string
+  filename: string
+  id: string
+  scoped?: boolean
+  trim?: boolean
+  isProd?: boolean
+  inMap?: RawSourceMap
+  preprocessLang?: PreprocessLang
+  preprocessOptions?: any
+  preprocessCustomRequire?: (id: string) => any
+  postcssOptions?: any
+  postcssPlugins?: any[]
+}
+```
+
+#### SFCStyleCompileResults
+
+```ts
+interface SFCStyleCompileResults {
+  code: string
+  map: RawSourceMap | undefined
+  rawResult: Result | LazyResult | undefined
+  errors: Error[]
+  dependencies: Set<string>
+}
+```
+
+### compileStyleAsync()
+
+Async version with CSS Modules support:
+
+```ts
+function compileStyleAsync(
+  options: SFCAsyncStyleCompileOptions
+): Promise<SFCStyleCompileResults>
+```
+
+#### SFCAsyncStyleCompileOptions
+
+```ts
+interface SFCAsyncStyleCompileOptions extends SFCStyleCompileOptions {
+  isAsync?: boolean
+  modules?: boolean
+  modulesOptions?: CSSModulesOptions
+}
+```
+
+#### CSSModulesOptions
+
+```ts
+interface CSSModulesOptions {
+  scopeBehaviour?: 'global' | 'local'
+  generateScopedName?: string | ((name: string, filename: string, css: string) => string)
+  hashPrefix?: string
+  localsConvention?: 'camelCase' | 'camelCaseOnly' | 'dashes' | 'dashesOnly'
+  exportGlobals?: boolean
+  globalModulePaths?: RegExp[]
+}
+```
+
+### parseCssVars()
+
+Extracts CSS variables from SFC styles:
+
+```ts
+function parseCssVars(sfc: SFCDescriptor): string[]
+```
+
+Returns an array of JavaScript expressions used in `v-bind()`.
+
+### cssVarsPlugin()
+
+PostCSS plugin for transforming `v-bind()` to CSS variables:
+
+```ts
+const cssVarsPlugin: PluginCreator<CssVarsPluginOptions>
+
+interface CssVarsPluginOptions {
+  id: string
+  isProd: boolean
+}
+```
+
+### useCssVars()
+
+Runtime helper for injecting CSS variables (automatically imported):
+
+```ts
+function useCssVars(getter: (ctx: any) => Record<string, string>): void
+```
+
+Used internally by the compiler. You rarely need to call this manually.
+
+### useCssModule()
+
+Retrieve CSS Modules object in `<script setup>`:
+
+```ts
+function useCssModule(name?: string): Record<string, string>
+```
+
+## PostCSS Plugins
+
+Internal PostCSS plugins used by the compiler:
+
+### scopedPlugin
+
+Transforms scoped styles by adding attribute selectors:
+
+```ts
+const scopedPlugin: PluginCreator<string>
+```
+
+### trimPlugin
+
+Removes whitespace from compiled CSS:
+
+```ts
+const trimPlugin: PluginCreator<void>
+```
+
+### cssVarsPlugin
+
+Transforms `v-bind()` to CSS custom properties:
+
+```ts
+const cssVarsPlugin: PluginCreator<CssVarsPluginOptions>
+```
+
+## Caveats
+
+### Scoped Styles
+
+- Parent scoped styles do not leak into child components
+- Child component root elements are affected by both parent and child scoped CSS
+- Use classes on root elements for styling, not tag selectors
+- Scoped styles do not eliminate the need for class naming strategies
+
+### CSS Modules
+
+- Requires async compilation via `compileStyleAsync()`
+- Build tool integration needed for full support
+- Class name hashing strategy configured via build tool
+
+### v-bind() in CSS
+
+- Expressions are evaluated in component context
+- Updates are reactive and batched
+- Use production build for hashed variable names
+- Variables are scoped to component instance
+- May have performance implications for frequently changing values
+
+## Best Practices
+
+1. Use scoped styles for component-specific styling
+2. Use `:deep()` sparingly for child component overrides
+3. Combine with CSS Modules for guaranteed name uniqueness
+4. Use `v-bind()` for truly dynamic values tied to component state
+5. Prefer CSS variables for theming when possible
+6. Use preprocessors for complex styling logic
+7. Use `:global()` only when necessary for global styles
+
+## See Also
+
+- [SFC Syntax Specification](/api/sfc-spec)
+- [SFC Script Setup](/api/sfc-script-setup)
+- [Compile-Time Flags](/api/compile-time-flags)

@@ -1,0 +1,484 @@
+---
+title: Lifecycle Hooks
+---
+
+Lifecycle hooks allow you to hook into different stages of a component's lifecycle.
+
+<Note>
+All lifecycle hooks are automatically bound to the current active instance, so you can access component state, computed properties, and methods.
+</Note>
+
+## Type Signature
+
+```ts
+type CreateHook<T = () => any> = (
+  hook: T,
+  target?: ComponentInternalInstance | null
+) => void
+```
+
+## Registration
+
+Lifecycle hooks should be registered synchronously during `setup()` or `<script setup>`:
+
+```vue
+<script setup>
+import { onMounted, onUpdated } from 'vue'
+
+onMounted(() => {
+  console.log('Component is mounted')
+})
+
+onUpdated(() => {
+  console.log('Component updated')
+})
+</script>
+```
+
+<Warning>
+If you are using async `setup()`, make sure to register lifecycle hooks **before** the first `await` statement.
+</Warning>
+
+---
+
+## onBeforeMount()
+
+Called right before the component is to be mounted.
+
+**Type Signature:**
+```ts
+function onBeforeMount(
+  hook: () => void,
+  target?: ComponentInternalInstance | null
+): void
+```
+
+### Example
+
+```js
+import { onBeforeMount } from 'vue'
+
+onBeforeMount(() => {
+  console.log('About to mount')
+})
+```
+
+### Timing
+
+- Called after `setup()` completes
+- Called before the initial render
+- Component's reactive state is set up
+- DOM has not been created yet
+
+---
+
+## onMounted()
+
+Called after the component has been mounted.
+
+**Type Signature:**
+```ts
+function onMounted(
+  hook: () => void,
+  target?: ComponentInternalInstance | null
+): void
+```
+
+### Example
+
+```js
+import { ref, onMounted } from 'vue'
+
+const el = ref()
+
+onMounted(() => {
+  console.log('Mounted!')
+  console.log(el.value) // DOM element
+})
+```
+
+### Timing
+
+- Called after:
+  - All synchronous child components have been mounted
+  - Its own DOM tree has been created and inserted into the parent container
+- Use this hook to:
+  - Access DOM elements
+  - Initialize third-party libraries
+  - Start data fetching
+
+<Note>
+This hook is **not** called during server-side rendering.
+</Note>
+
+---
+
+## onBeforeUpdate()
+
+Called right before the component is about to update its DOM tree due to a reactive state change.
+
+**Type Signature:**
+```ts
+function onBeforeUpdate(
+  hook: () => void,
+  target?: ComponentInternalInstance | null
+): void
+```
+
+### Example
+
+```js
+import { onBeforeUpdate } from 'vue'
+
+onBeforeUpdate(() => {
+  // Access DOM before update
+  console.log('DOM before update:', el.value.textContent)
+})
+```
+
+### Use Cases
+
+- Access DOM state before Vue updates it
+- Useful for removing manually added event listeners
+
+<Note>
+This hook is **not** called during server-side rendering.
+</Note>
+
+---
+
+## onUpdated()
+
+Called after the component has updated its DOM tree due to a reactive state change.
+
+**Type Signature:**
+```ts
+function onUpdated(
+  hook: () => void,
+  target?: ComponentInternalInstance | null
+): void
+```
+
+### Example
+
+```js
+import { onUpdated } from 'vue'
+
+onUpdated(() => {
+  // Access updated DOM
+  console.log('DOM updated:', el.value.textContent)
+})
+```
+
+### Timing
+
+- Called after any DOM update caused by reactive state changes
+- Parent component's `onUpdated` is called after child components
+
+<Warning>
+Do not mutate component state in `onUpdated()` - this can lead to infinite update loops. Use a computed property or watcher instead.
+</Warning>
+
+<Note>
+This hook is **not** called during server-side rendering.
+</Note>
+
+---
+
+## onBeforeUnmount()
+
+Called right before a component instance is to be unmounted.
+
+**Type Signature:**
+```ts
+function onBeforeUnmount(
+  hook: () => void,
+  target?: ComponentInternalInstance | null
+): void
+```
+
+### Example
+
+```js
+import { onBeforeUnmount } from 'vue'
+
+onBeforeUnmount(() => {
+  console.log('About to unmount')
+  // Component is still fully functional
+})
+```
+
+### Timing
+
+- Component instance is still fully functional
+- Good place to clean up manually created side effects like timers or server connections
+
+<Note>
+This hook is **not** called during server-side rendering.
+</Note>
+
+---
+
+## onUnmounted()
+
+Called after the component has been unmounted.
+
+**Type Signature:**
+```ts
+function onUnmounted(
+  hook: () => void,
+  target?: ComponentInternalInstance | null
+): void
+```
+
+### Example
+
+```js
+import { onUnmounted } from 'vue'
+
+onUnmounted(() => {
+  console.log('Unmounted!')
+})
+```
+
+### Timing
+
+- Called after:
+  - All child components have been unmounted
+  - All associated reactive effects have been stopped
+
+### Use Cases
+
+- Clean up timers
+- Cancel network requests
+- Remove event listeners
+- Tear down integrations
+
+<Note>
+This hook is **not** called during server-side rendering.
+</Note>
+
+---
+
+## onActivated()
+
+Called when a kept-alive component instance is activated (inserted into the DOM).
+
+**Type Signature:**
+```ts
+function onActivated(
+  hook: () => void,
+  target?: ComponentInternalInstance | null
+): void
+```
+
+### Example
+
+```vue
+<script setup>
+import { onActivated } from 'vue'
+
+onActivated(() => {
+  console.log('Component activated')
+  // Refresh data, restart timers, etc.
+})
+</script>
+```
+
+<Note>
+Only applies to components wrapped in `<KeepAlive>`.
+</Note>
+
+---
+
+## onDeactivated()
+
+Called when a kept-alive component instance is deactivated (removed from the DOM).
+
+**Type Signature:**
+```ts
+function onDeactivated(
+  hook: () => void,
+  target?: ComponentInternalInstance | null
+): void
+```
+
+### Example
+
+```vue
+<script setup>
+import { onDeactivated } from 'vue'
+
+onDeactivated(() => {
+  console.log('Component deactivated')
+  // Pause operations, clean up resources, etc.
+})
+</script>
+```
+
+<Note>
+Only applies to components wrapped in `<KeepAlive>`.
+</Note>
+
+---
+
+## onErrorCaptured()
+
+Called when an error propagating from a descendant component has been captured.
+
+**Type Signature:**
+```ts
+function onErrorCaptured<TError = Error>(
+  hook: ErrorCapturedHook<TError>,
+  target?: ComponentInternalInstance | null
+): void
+
+type ErrorCapturedHook<TError = unknown> = (
+  err: TError,
+  instance: ComponentPublicInstance | null,
+  info: string
+) => boolean | void
+```
+
+### Parameters
+
+<ParamField path="err" type="Error">
+  The error object
+</ParamField>
+
+<ParamField path="instance" type="ComponentPublicInstance | null">
+  The component instance that triggered the error
+</ParamField>
+
+<ParamField path="info" type="string">
+  A string specifying the error source type
+</ParamField>
+
+### Example
+
+```js
+import { onErrorCaptured } from 'vue'
+
+onErrorCaptured((err, instance, info) => {
+  console.error('Error captured:', err)
+  console.log('From component:', instance)
+  console.log('Error info:', info)
+  
+  // Return false to prevent error from propagating further
+  return false
+})
+```
+
+### Error Sources
+
+- Component renders
+- Event handlers
+- Lifecycle hooks
+- `setup()` function
+- Watchers
+- Custom directive hooks
+- Transition hooks
+
+### Return Value
+
+- Return `false` to stop the error from propagating further
+- By default, errors propagate to `app.config.errorHandler`
+
+---
+
+## onRenderTracked()
+
+Called when a reactive dependency has been tracked by the component's render effect.
+
+**Type Signature:**
+```ts
+function onRenderTracked(
+  hook: DebuggerHook,
+  target?: ComponentInternalInstance | null
+): void
+
+type DebuggerHook = (e: DebuggerEvent) => void
+```
+
+### Example
+
+```js
+import { onRenderTracked } from 'vue'
+
+onRenderTracked((e) => {
+  console.log('Tracked:', e)
+  // { effect, target, type, key }
+})
+```
+
+<Note>
+This hook is **development-only** and not called during server-side rendering.
+</Note>
+
+---
+
+## onRenderTriggered()
+
+Called when a reactive dependency triggers the component's render effect to re-run.
+
+**Type Signature:**
+```ts
+function onRenderTriggered(
+  hook: DebuggerHook,
+  target?: ComponentInternalInstance | null
+): void
+
+type DebuggerHook = (e: DebuggerEvent) => void
+```
+
+### Example
+
+```js
+import { onRenderTriggered } from 'vue'
+
+onRenderTriggered((e) => {
+  console.log('Triggered:', e)
+  // { effect, target, type, key, newValue, oldValue }
+})
+```
+
+<Note>
+This hook is **development-only** and not called during server-side rendering.
+</Note>
+
+---
+
+## onServerPrefetch()
+
+Registers an async function to be resolved before the component instance is rendered on the server.
+
+**Type Signature:**
+```ts
+function onServerPrefetch(
+  hook: () => Promise<any>,
+  target?: ComponentInternalInstance | null
+): void
+```
+
+### Example
+
+```js
+import { ref, onServerPrefetch } from 'vue'
+
+const data = ref(null)
+
+onServerPrefetch(async () => {
+  // Fetch data before rendering on server
+  data.value = await fetchData()
+})
+```
+
+### Use Cases
+
+- Pre-fetch data during SSR
+- Perform async operations before server rendering
+- The returned promise will be awaited before rendering
+
+<Note>
+This hook is **only** called during server-side rendering.
+</Note>

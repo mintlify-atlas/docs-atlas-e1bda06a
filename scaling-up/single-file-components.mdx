@@ -1,0 +1,248 @@
+---
+title: Single-File Components (SFC)
+description: Learn about Vue's Single-File Component format and the compiler-sfc package that powers it
+---
+
+# Single-File Components
+
+Vue Single-File Components (SFCs) provide a modular and maintainable way to structure Vue applications. Each `.vue` file encapsulates the template, script, and styles for a component in a single file.
+
+## What are Single-File Components?
+
+A Single-File Component consists of three main sections:
+
+```vue
+<template>
+  <div class="example">{{ msg }}</div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      msg: 'Hello world!'
+    }
+  }
+}
+</script>
+
+<style scoped>
+.example {
+  color: red;
+}
+</style>
+```
+
+## The Compiler SFC Package
+
+Vue's `@vue/compiler-sfc` package (version 3.5.29) provides low-level utilities for compiling Single-File Components into JavaScript. As of Vue 3.2.13+, this package is included as a dependency of the main `vue` package and can be accessed as `vue/compiler-sfc`.
+
+### Core API
+
+The compiler-sfc package exports several key functions:
+
+#### `parse()`
+Parses a `.vue` file into a descriptor object containing the template, script, and style blocks.
+
+```ts
+import { parse } from '@vue/compiler-sfc'
+
+const { descriptor, errors } = parse(source, {
+  filename: 'example.vue'
+})
+```
+
+#### `compileScript()`
+Compiles the `<script>` or `<script setup>` block, handling features like:
+- `<script setup>` syntax
+- CSS variable injection
+- TypeScript support
+
+```ts
+import { compileScript } from '@vue/compiler-sfc'
+
+const compiled = compileScript(descriptor, {
+  id: 'scope-id'
+})
+```
+
+#### `compileTemplate()`
+Compiles the raw template into a render function.
+
+```ts
+import { compileTemplate } from '@vue/compiler-sfc'
+
+const { code } = compileTemplate({
+  source: descriptor.template.content,
+  id: 'scope-id',
+  filename: 'example.vue'
+})
+```
+
+#### `compileStyle()`
+Compiles CSS to handle:
+- `<style scoped>` scoping
+- `<style module>` CSS modules
+- CSS variable injection
+- Preprocessors (via external loaders)
+
+```ts
+import { compileStyle } from '@vue/compiler-sfc'
+
+const { code, errors } = compileStyle({
+  source: descriptor.styles[0].content,
+  id: 'scope-id',
+  scoped: true
+})
+```
+
+## SFC Compilation Workflow
+
+The compilation process follows a facade module pattern:
+
+```
+                                   +--------------------+
+                                   |                    |
+                                   |  script transform  |
+                            +----->+                    |
+                            |      +--------------------+
+                            |
+ +--------------------+     |      +--------------------+
+ |                    |     |      |                    |
+ |  facade transform  +----------->+ template transform |
+ |                    |     |      |                    |
+ +--------------------+     |      +--------------------+
+                            |
+                            |      +--------------------+
+                            +----->+                    |
+                                   |  style transform   |
+                                   |                    |
+                                   +--------------------+
+```
+
+### Facade Module
+
+The facade module imports individual blocks of the component:
+
+```js
+// main script
+import script from '/project/foo.vue?vue&type=script'
+// template compiled to render function
+import { render } from '/project/foo.vue?vue&type=template&id=xxxxxx'
+// css
+import '/project/foo.vue?vue&type=style&index=0&id=xxxxxx'
+
+// attach render function to script
+script.render = render
+
+// attach additional metadata
+script.__file = 'example.vue'
+script.__scopeId = 'xxxxxx'
+
+export default script
+```
+
+## Advanced Features
+
+### Parse Cache
+
+The package includes a parse cache to improve performance for repeated parsing:
+
+```ts
+import { parseCache } from '@vue/compiler-sfc'
+
+// Cache is a Map<string, SFCParseResult>
+const cached = parseCache.get(filename)
+```
+
+### Type Resolution
+
+For TypeScript support, the package provides type resolution utilities:
+
+```ts
+import { resolveTypeElements, inferRuntimeType } from '@vue/compiler-sfc'
+```
+
+### Utilities
+
+The package also exports useful utilities:
+
+- `rewriteDefault()` - Rewrites default exports
+- `MagicString` - String manipulation utility
+- `babelParse()` - Babel parser for JavaScript/TypeScript
+- `walk()` - AST walker from estree-walker
+- `generateCodeFrame()` - Generate code frames for error messages
+
+## Integration with Build Tools
+
+SFC compilation is typically integrated into build tools:
+
+- **Vite**: [@vitejs/plugin-vue](https://github.com/vitejs/vite-plugin-vue)
+- **webpack**: [vue-loader](https://github.com/vuejs/vue-loader)
+
+These tools handle the complex orchestration of:
+- Hot Module Replacement (HMR)
+- Preprocessor integration
+- Parallel compilation
+- Source maps
+
+## Script Setup
+
+The `<script setup>` syntax provides a more concise way to write composition API:
+
+```vue
+<script setup>
+import { ref } from 'vue'
+
+const count = ref(0)
+const increment = () => count.value++
+</script>
+
+<template>
+  <button @click="increment">Count: {{ count }}</button>
+</template>
+```
+
+The `compileScript()` function handles the transformation of this syntax.
+
+## Scoped Styles
+
+Scoped styles ensure CSS only applies to the current component:
+
+```vue
+<style scoped>
+.button {
+  color: red;
+}
+</style>
+```
+
+This is compiled to:
+
+```css
+.button[data-v-f3f3eg9] {
+  color: red;
+}
+```
+
+## CSS Modules
+
+For more control over CSS scoping:
+
+```vue
+<template>
+  <p :class="$style.red">This should be red</p>
+</template>
+
+<style module>
+.red {
+  color: red;
+}
+</style>
+```
+
+## Resources
+
+- [Compiler SFC Source Code](https://github.com/vuejs/core/tree/main/packages/compiler-sfc)
+- [SFC Specification](https://vuejs.org/api/sfc-spec)
+- [Script Setup RFC](https://github.com/vuejs/rfcs/blob/master/active-rfcs/0040-script-setup.md)

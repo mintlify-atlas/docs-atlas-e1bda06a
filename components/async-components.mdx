@@ -1,0 +1,579 @@
+---
+title: Async Components
+description: Learn about lazy loading and code splitting with async components in Vue.js
+---
+
+## Overview
+
+Async components allow you to split your application into smaller chunks and load components on demand. This is essential for optimizing bundle size and improving initial load performance.
+
+## Basic Usage
+
+### Simple Async Component
+
+```ts
+import { defineAsyncComponent } from 'vue'
+
+const AsyncComponent = defineAsyncComponent(() =>
+  import('./components/MyComponent.vue')
+)
+```
+
+### Using in Templates
+
+```vue
+<script setup>
+import { defineAsyncComponent } from 'vue'
+
+const AdminPanel = defineAsyncComponent(() =>
+  import('./components/AdminPanel.vue')
+)
+</script>
+
+<template>
+  <AdminPanel v-if="isAdmin" />
+</template>
+```
+
+## Function Signature
+
+### Loader Function
+
+```ts
+export type AsyncComponentLoader<T = any> = () => Promise<
+  AsyncComponentResolveResult<T>
+>
+
+export type AsyncComponentResolveResult<T = Component> = 
+  T | { default: T } // ES modules
+```
+
+Source: `runtime-core/src/apiAsyncComponent.ts:21-25`
+
+### defineAsyncComponent
+
+```ts
+export function defineAsyncComponent<
+  T extends Component = { new (): ComponentPublicInstance },
+>(
+  source: AsyncComponentLoader<T> | AsyncComponentOptions<T>
+): T
+```
+
+Source: `runtime-core/src/apiAsyncComponent.ts:47-49`
+
+## Advanced Options
+
+### AsyncComponentOptions Interface
+
+```ts
+export interface AsyncComponentOptions<T = any> {
+  loader: AsyncComponentLoader<T>
+  loadingComponent?: Component
+  errorComponent?: Component
+  delay?: number
+  timeout?: number
+  suspensible?: boolean
+  hydrate?: HydrationStrategy
+  onError?: (
+    error: Error,
+    retry: () => void,
+    fail: () => void,
+    attempts: number,
+  ) => any
+}
+```
+
+Source: `runtime-core/src/apiAsyncComponent.ts:27-41`
+
+### Full Options Example
+
+```ts
+import { defineAsyncComponent } from 'vue'
+import LoadingComponent from './Loading.vue'
+import ErrorComponent from './Error.vue'
+
+const AsyncComponent = defineAsyncComponent({
+  // The loader function
+  loader: () => import('./MyComponent.vue'),
+  
+  // Component to show while loading
+  loadingComponent: LoadingComponent,
+  
+  // Delay before showing loading component (default: 200ms)
+  delay: 200,
+  
+  // Component to show if load fails
+  errorComponent: ErrorComponent,
+  
+  // Timeout in milliseconds (default: Infinity)
+  timeout: 3000,
+  
+  // Use Suspense (default: true)
+  suspensible: false,
+  
+  // Error handler
+  onError(error, retry, fail, attempts) {
+    if (attempts <= 3) {
+      // Retry on error, max 3 attempts
+      retry()
+    } else {
+      fail()
+    }
+  }
+})
+```
+
+Source: `runtime-core/src/apiAsyncComponent.ts:54-63`
+
+## Loading States
+
+### Loading Component
+
+```vue
+<!-- Loading.vue -->
+<template>
+  <div class="loading">
+    <span class="spinner"></span>
+    <p>Loading...</p>
+  </div>
+</template>
+
+<style scoped>
+.spinner {
+  /* spinner animation */
+}
+</style>
+```
+
+```ts
+import { defineAsyncComponent } from 'vue'
+import Loading from './Loading.vue'
+
+const AsyncComp = defineAsyncComponent({
+  loader: () => import('./Heavy.vue'),
+  loadingComponent: Loading,
+  delay: 200 // Show loading after 200ms
+})
+```
+
+### Error Component
+
+```vue
+<!-- Error.vue -->
+<template>
+  <div class="error">
+    <p>Failed to load component</p>
+    <button @click="retry">Retry</button>
+  </div>
+</template>
+
+<script setup>
+defineProps<{
+  error: Error
+}>()
+
+defineEmits<{
+  retry: []
+}>()
+</script>
+```
+
+## Error Handling
+
+### onError Callback
+
+```ts
+const AsyncComp = defineAsyncComponent({
+  loader: () => import('./Component.vue'),
+  
+  onError(error, retry, fail, attempts) {
+    console.error(`Load attempt ${attempts} failed:`, error)
+    
+    if (error.message.includes('timeout')) {
+      // Retry on timeout
+      retry()
+    } else if (attempts <= 3) {
+      // Retry up to 3 times for other errors
+      setTimeout(() => retry(), 1000)
+    } else {
+      // Give up after 3 attempts
+      fail()
+    }
+  }
+})
+```
+
+Source: `runtime-core/src/apiAsyncComponent.ts:83-91`
+
+### Implementation Details
+
+```ts
+const load = (): Promise<ConcreteComponent> => {
+  let thisRequest: Promise<ConcreteComponent>
+  return (
+    pendingRequest ||
+    (thisRequest = pendingRequest =
+      loader()
+        .catch(err => {
+          err = err instanceof Error ? err : new Error(String(err))
+          if (userOnError) {
+            return new Promise((resolve, reject) => {
+              const userRetry = () => resolve(retry())
+              const userFail = () => reject(err)
+              userOnError(err, userRetry, userFail, retries + 1)
+            })
+          } else {
+            throw err
+          }
+        })
+        .then((comp: any) => {
+          // Handle ES module default export
+          if (
+            comp &&
+            (comp.__esModule || comp[Symbol.toStringTag] === 'Module')
+          ) {
+            comp = comp.default
+          }
+          resolvedComp = comp
+          return comp
+        }))
+  )
+}
+```
+
+Source: `runtime-core/src/apiAsyncComponent.ts:75-116`
+
+## Timeout Configuration
+
+```ts
+const AsyncComp = defineAsyncComponent({
+  loader: () => import('./Component.vue'),
+  timeout: 5000, // 5 second timeout
+  errorComponent: TimeoutError
+})
+```
+
+Implementation:
+
+```ts
+if (timeout != null) {
+  setTimeout(() => {
+    if (!loaded.value && !error.value) {
+      const err = new Error(
+        `Async component timed out after ${timeout}ms.`
+      )
+      onError(err)
+      error.value = err
+    }
+  }, timeout)
+}
+```
+
+Source: `runtime-core/src/apiAsyncComponent.ts:210-220`
+
+## Suspense Integration
+
+### With Suspense
+
+```vue
+<template>
+  <Suspense>
+    <template #default>
+      <AsyncComponent />
+    </template>
+    <template #fallback>
+      <LoadingSpinner />
+    </template>
+  </Suspense>
+</template>
+
+<script setup>
+import { defineAsyncComponent } from 'vue'
+
+const AsyncComponent = defineAsyncComponent({
+  loader: () => import('./Component.vue'),
+  suspensible: true // default
+})
+</script>
+```
+
+### Without Suspense
+
+```ts
+const AsyncComponent = defineAsyncComponent({
+  loader: () => import('./Component.vue'),
+  suspensible: false,
+  loadingComponent: LoadingComponent
+})
+```
+
+Source: `runtime-core/src/apiAsyncComponent.ts:181-184`
+
+## Lazy Hydration
+
+Async components support lazy hydration strategies:
+
+```ts
+import { defineAsyncComponent } from 'vue'
+import { hydrateOnVisible } from 'vue/hydration-strategies'
+
+const AsyncComponent = defineAsyncComponent({
+  loader: () => import('./Heavy.vue'),
+  hydrate: hydrateOnVisible()
+})
+```
+
+Source: `runtime-core/src/apiAsyncComponent.ts:34`
+
+### Hydration Implementation
+
+```ts
+__asyncHydrate(el, instance, hydrate) {
+  let patched = false
+  ;(instance.bu || (instance.bu = [])).push(() => (patched = true))
+  
+  const performHydrate = () => {
+    if (patched) {
+      if (__DEV__) {
+        warn(
+          `Skipping lazy hydration for component: ` +
+          `it was updated before lazy hydration performed.`
+        )
+      }
+      return
+    }
+    hydrate()
+  }
+  
+  const doHydrate = hydrateStrategy
+    ? () => {
+        const teardown = hydrateStrategy(performHydrate, cb =>
+          forEachElement(el, cb)
+        )
+        if (teardown) {
+          ;(instance.bum || (instance.bum = [])).push(teardown)
+        }
+      }
+    : performHydrate
+    
+  if (resolvedComp) {
+    doHydrate()
+  } else {
+    load().then(() => !instance.isUnmounted && doHydrate())
+  }
+}
+```
+
+Source: `runtime-core/src/apiAsyncComponent.ts:124-155`
+
+## Router Integration
+
+### Route-Level Code Splitting
+
+```ts
+import { createRouter, createWebHistory } from 'vue-router'
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes: [
+    {
+      path: '/admin',
+      component: () => import('./views/Admin.vue')
+    },
+    {
+      path: '/dashboard',
+      component: () => import('./views/Dashboard.vue')
+    }
+  ]
+})
+```
+
+### Named Chunks
+
+```ts
+const AdminPanel = defineAsyncComponent(
+  () => import(/* webpackChunkName: "admin" */ './AdminPanel.vue')
+)
+```
+
+## Testing Async Components
+
+### Mock Async Component
+
+```ts
+import { defineComponent } from 'vue'
+import { mount } from '@vue/test-utils'
+
+const AsyncComp = defineAsyncComponent(() =>
+  Promise.resolve({
+    template: '<div>Async Content</div>'
+  })
+)
+
+it('renders async component', async () => {
+  const wrapper = mount(AsyncComp)
+  await wrapper.vm.$nextTick()
+  expect(wrapper.text()).toBe('Async Content')
+})
+```
+
+### Test Loading State
+
+```ts
+const AsyncComp = defineAsyncComponent({
+  loader: () => new Promise(resolve => {
+    setTimeout(() => resolve({ template: '<div>Loaded</div>' }), 100)
+  }),
+  loadingComponent: { template: '<div>Loading...</div>' },
+  delay: 0
+})
+
+it('shows loading state', async () => {
+  const wrapper = mount(AsyncComp)
+  expect(wrapper.text()).toBe('Loading...')
+  
+  await new Promise(r => setTimeout(r, 150))
+  await wrapper.vm.$nextTick()
+  
+  expect(wrapper.text()).toBe('Loaded')
+})
+```
+
+## Performance Optimization
+
+### Prefetching
+
+```ts
+// Prefetch on hover
+const AsyncComp = defineAsyncComponent(() =>
+  import('./Component.vue')
+)
+
+function prefetch() {
+  AsyncComp.__asyncLoader() // Trigger load
+}
+```
+
+### Chunk Groups
+
+```ts
+// Group related components
+const AsyncCompA = defineAsyncComponent(() =>
+  import(/* webpackChunkName: "group-dashboard" */ './CompA.vue')
+)
+
+const AsyncCompB = defineAsyncComponent(() =>
+  import(/* webpackChunkName: "group-dashboard" */ './CompB.vue')
+)
+```
+
+## Internal Implementation
+
+### isAsyncWrapper
+
+```ts
+export const isAsyncWrapper = (
+  i: ComponentInternalInstance | VNode
+): boolean => !!(i.type as ComponentOptions).__asyncLoader
+```
+
+Source: `runtime-core/src/apiAsyncComponent.ts:43-44`
+
+### Wrapper Component
+
+```ts
+return defineComponent({
+  name: 'AsyncComponentWrapper',
+  
+  __asyncLoader: load,
+  
+  get __asyncResolved() {
+    return resolvedComp
+  },
+  
+  setup() {
+    const instance = currentInstance!
+    markAsyncBoundary(instance)
+    
+    // Already resolved
+    if (resolvedComp) {
+      return () => createInnerComp(resolvedComp!, instance)
+    }
+    
+    // Handle loading and error states
+    const loaded = ref(false)
+    const error = ref()
+    const delayed = ref(!!delay)
+    
+    load()
+      .then(() => {
+        loaded.value = true
+      })
+      .catch(err => {
+        onError(err)
+        error.value = err
+      })
+    
+    return () => {
+      if (loaded.value && resolvedComp) {
+        return createInnerComp(resolvedComp, instance)
+      } else if (error.value && errorComponent) {
+        return createVNode(errorComponent, { error: error.value })
+      } else if (loadingComponent && !delayed.value) {
+        return createInnerComp(loadingComponent, instance)
+      }
+    }
+  }
+})
+```
+
+Source: `runtime-core/src/apiAsyncComponent.ts:119-251`
+
+## Best Practices
+
+1. **Use for heavy components** that aren't needed immediately
+2. **Configure timeouts** for slow networks
+3. **Provide loading states** for better UX
+4. **Handle errors gracefully** with retry logic
+5. **Group related components** in the same chunk
+6. **Test loading states** thoroughly
+7. **Monitor chunk sizes** to ensure effective splitting
+8. **Use named chunks** for better debugging
+
+## Common Use Cases
+
+### Modal Dialogs
+
+```ts
+const SettingsModal = defineAsyncComponent({
+  loader: () => import('./SettingsModal.vue'),
+  delay: 0 // Show loading immediately for modals
+})
+```
+
+### Admin Panels
+
+```ts
+const AdminDashboard = defineAsyncComponent({
+  loader: () => import('./admin/Dashboard.vue'),
+  loadingComponent: AdminLoading,
+  errorComponent: AdminError
+})
+```
+
+### Heavy Charts
+
+```ts
+const DataVisualization = defineAsyncComponent({
+  loader: () => import('./charts/Visualization.vue'),
+  delay: 200,
+  timeout: 10000
+})
+```
+
+## Related APIs
+
+- [Suspense](/guide/suspense) - Learn about Suspense for async components
+- [Registration](/components/registration) - Learn about component registration
+- [defineComponent](/api/define-component) - Learn about component definition

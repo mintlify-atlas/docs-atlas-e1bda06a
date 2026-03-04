@@ -1,0 +1,331 @@
+---
+title: Template Syntax
+description: Learn Vue's template syntax for rendering dynamic content, binding attributes, and handling expressions.
+---
+
+Vue uses an HTML-based template syntax that allows you to declaratively bind the rendered DOM to the underlying component instance's data.
+
+## Text Interpolation
+
+The most basic form of data binding is text interpolation using the "Mustache" syntax (double curly braces):
+
+```vue
+<template>
+  <span>Message: {{ msg }}</span>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const msg = ref('Hello Vue!')
+</script>
+```
+
+The mustache tag will be replaced with the value of the `msg` property from the component instance. It will also be updated whenever the `msg` property changes.
+
+## Raw HTML
+
+The double mustaches interpret data as plain text, not HTML. To output real HTML, use the `v-html` directive:
+
+```vue
+<template>
+  <p>Using text interpolation: {{ rawHtml }}</p>
+  <p>Using v-html directive: <span v-html="rawHtml"></span></p>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const rawHtml = ref('<span style="color: red">This is red</span>')
+</script>
+```
+
+<Warning>
+  Dynamically rendering arbitrary HTML can be dangerous as it can lead to XSS vulnerabilities. Only use `v-html` on trusted content and never on user-provided content.
+</Warning>
+
+## Attribute Bindings
+
+Mustaches cannot be used inside HTML attributes. Instead, use a `v-bind` directive:
+
+```vue
+<template>
+  <div v-bind:id="dynamicId"></div>
+  <!-- Shorthand -->
+  <div :id="dynamicId"></div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const dynamicId = ref('my-id')
+</script>
+```
+
+### Boolean Attributes
+
+Boolean attributes are attributes that indicate true/false values by their presence:
+
+```vue
+<template>
+  <button :disabled="isButtonDisabled">Click me</button>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const isButtonDisabled = ref(true)
+</script>
+```
+
+### Dynamically Binding Multiple Attributes
+
+You can bind an object of attributes to an element:
+
+```vue
+<template>
+  <div v-bind="objectOfAttrs"></div>
+</template>
+
+<script setup>
+import { reactive } from 'vue'
+
+const objectOfAttrs = reactive({
+  id: 'container',
+  class: 'wrapper',
+  style: 'color: red'
+})
+</script>
+```
+
+## Using JavaScript Expressions
+
+Vue supports the full power of JavaScript expressions inside data bindings:
+
+```vue
+<template>
+  <div>{{ number + 1 }}</div>
+  <div>{{ ok ? 'YES' : 'NO' }}</div>
+  <div>{{ message.split('').reverse().join('') }}</div>
+  <div :id="`list-${id}`"></div>
+</template>
+```
+
+<Note>
+  Each binding can only contain **one single expression**. An expression is a piece of code that can be evaluated to a value.
+</Note>
+
+### Expressions Not Supported
+
+The following will NOT work:
+
+```vue
+<template>
+  <!-- This is a statement, not an expression -->
+  <div>{{ var a = 1 }}</div>
+
+  <!-- Flow control won't work, use ternary expressions -->
+  <div>{{ if (ok) { return message } }}</div>
+</template>
+```
+
+## Calling Functions
+
+You can call component methods inside binding expressions:
+
+```vue
+<template>
+  <time :title="toTitleDate(date)" :datetime="date">
+    {{ formatDate(date) }}
+  </time>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const date = ref(new Date())
+
+function formatDate(date) {
+  return date.toLocaleDateString()
+}
+
+function toTitleDate(date) {
+  return date.toISOString()
+}
+</script>
+```
+
+<Warning>
+  Functions called inside binding expressions will be called every time the component updates, so they should not have side effects or be computationally expensive. For expensive operations, use computed properties instead.
+</Warning>
+
+## Directives
+
+Directives are special attributes with the `v-` prefix. Vue provides several built-in directives:
+
+- `v-if` - Conditional rendering
+- `v-for` - List rendering
+- `v-on` - Event handling
+- `v-bind` - Attribute binding
+- `v-model` - Two-way binding
+- `v-show` - Toggle display
+- `v-html` - Raw HTML
+- `v-text` - Text content
+- `v-once` - One-time rendering
+- `v-memo` - Memoize subtree
+
+### Directive Syntax
+
+A directive's full syntax looks like this:
+
+```
+v-directive:argument.modifier="value"
+```
+
+<Steps>
+  <Step title="Directive name">
+    The directive name (e.g., `if`, `for`, `bind`)
+  </Step>
+  
+  <Step title="Argument (optional)">
+    Follows the colon (e.g., `:href` in `v-bind:href`)
+  </Step>
+  
+  <Step title="Modifiers (optional)">
+    Denoted by a dot (e.g., `.prevent` in `v-on:submit.prevent`)
+  </Step>
+  
+  <Step title="Value">
+    The JavaScript expression to bind
+  </Step>
+</Steps>
+
+## Dynamic Arguments
+
+You can use a JavaScript expression in a directive argument by wrapping it with square brackets:
+
+```vue
+<template>
+  <a v-bind:[attributeName]="url">Link</a>
+  <!-- Shorthand -->
+  <a :[attributeName]="url">Link</a>
+  
+  <button v-on:[eventName]="handler">Click</button>
+  <!-- Shorthand -->
+  <button @[eventName]="handler">Click</button>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const attributeName = ref('href')
+const eventName = ref('click')
+const url = ref('https://vuejs.org')
+
+function handler() {
+  console.log('Clicked!')
+}
+</script>
+```
+
+<Note>
+  Dynamic argument expressions have some syntax constraints. Spaces and quotes are invalid inside HTML attribute names. Avoid uppercase keys as browsers coerce attribute names to lowercase.
+</Note>
+
+## Modifiers
+
+Modifiers are special postfixes denoted by a dot, indicating that a directive should be bound in some special way.
+
+### Event Modifiers
+
+From `packages/runtime-dom/src/directives/vOn.ts:34-47`, Vue provides event modifiers like:
+
+```vue
+<template>
+  <!-- Stop propagation -->
+  <button @click.stop="doThis">Click</button>
+  
+  <!-- Prevent default -->
+  <form @submit.prevent="onSubmit">Submit</form>
+  
+  <!-- Chain modifiers -->
+  <button @click.stop.prevent="doThat">Click</button>
+  
+  <!-- Just the modifier -->
+  <form @submit.prevent></form>
+</template>
+```
+
+Available modifiers: `.stop`, `.prevent`, `.self`, `.capture`, `.once`, `.passive`
+
+### Key Modifiers
+
+When listening for keyboard events:
+
+```vue
+<template>
+  <!-- Only call handler when key is Enter -->
+  <input @keyup.enter="submit" />
+  
+  <!-- Multiple keys -->
+  <input @keyup.enter.space="handler" />
+</template>
+```
+
+### System Modifier Keys
+
+From `packages/runtime-dom/src/directives/vOn.ts:11`, system modifiers are:
+
+```vue
+<template>
+  <!-- Ctrl + Click -->
+  <div @click.ctrl="handler">Ctrl+Click</div>
+  
+  <!-- Alt + Enter -->
+  <input @keyup.alt.enter="clear" />
+  
+  <!-- Exact modifier -->
+  <button @click.ctrl.exact="onCtrlClick">Ctrl only</button>
+</template>
+```
+
+System modifiers: `.ctrl`, `.alt`, `.shift`, `.meta`
+
+## Render Functions
+
+For advanced use cases, Vue also provides the `h()` function from `packages/runtime-core/src/h.ts` for programmatically creating VNodes:
+
+```typescript
+import { h } from 'vue'
+
+const vnode = h(
+  'div', // type
+  { id: 'foo', class: 'bar' }, // props
+  [
+    h('span', 'Hello'),
+    h('span', 'World')
+  ] // children
+)
+```
+
+This is useful when templates are too constraining or when building higher-order components.
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Reactivity Fundamentals" icon="bolt" href="/essentials/reactivity-fundamentals">
+    Learn about reactive state
+  </Card>
+  
+  <Card title="Conditional Rendering" icon="code-branch" href="/essentials/conditional-rendering">
+    Control element rendering with v-if and v-show
+  </Card>
+  
+  <Card title="List Rendering" icon="list" href="/essentials/list-rendering">
+    Render lists with v-for
+  </Card>
+  
+  <Card title="Event Handling" icon="hand-pointer" href="/essentials/event-handling">
+    Handle user events
+  </Card>
+</CardGroup>

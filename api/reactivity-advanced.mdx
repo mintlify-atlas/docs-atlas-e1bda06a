@@ -1,0 +1,452 @@
+---
+title: Reactivity API - Advanced
+description: Advanced reactivity APIs for fine-grained control in Vue.js
+---
+
+# Reactivity API: Advanced
+
+Advanced APIs for fine-grained control over the reactivity system.
+
+## shallowRef()
+
+Shallow version of `ref()`. Unlike `ref()`, the inner value of a shallow ref is stored and exposed as-is, and will not be made deeply reactive.
+
+<ParamField path="value" type="T">
+  The value to wrap in a shallow ref.
+</ParamField>
+
+**Type:**
+```typescript
+function shallowRef<T>(
+  value: T
+): Ref extends T
+  ? T extends Ref
+    ? IfAny<T, ShallowRef<T>, T>
+    : ShallowRef<T>
+  : ShallowRef<T>
+
+function shallowRef<T = any>(): ShallowRef<T | undefined>
+
+type ShallowRef<T = any, S = T> = Ref<T, S> & { [ShallowRefMarker]?: true }
+```
+
+**Returns:** `ShallowRef<T>` - A shallow ref object
+
+**Example:**
+```javascript
+import { shallowRef, triggerRef } from 'vue'
+
+const state = shallowRef({ count: 1 })
+
+// does NOT trigger change
+state.value.count = 2
+
+// does trigger change
+state.value = { count: 2 }
+```
+
+**Triggering updates manually:**
+```javascript
+const shallow = shallowRef({
+  greet: 'Hello, world'
+})
+
+// Logs "Hello, world" once for the first run
+watchEffect(() => {
+  console.log(shallow.value.greet)
+})
+
+// This won't trigger the effect because the ref is shallow
+shallow.value.greet = 'Hello, universe'
+
+// Manually trigger - logs "Hello, universe"
+triggerRef(shallow)
+```
+
+**Details:**
+- Only the `.value` access is reactive, not the nested properties
+- Unlike `ref()`, the inner value is stored as-is without deep reactive conversion
+- Use for performance optimization when you have large objects or arrays where only the root-level reactivity is needed
+- Useful when integrating with external state management systems
+
+**See also:**
+- [Guide - Reduce Reactivity Overhead for Large Immutable Structures](/guide/best-practices/performance#reduce-reactivity-overhead-for-large-immutable-structures)
+
+---
+
+## triggerRef()
+
+Force triggers effects that depend on a shallow ref. This is typically used after making deep mutations to the inner value of a shallow ref.
+
+<ParamField path="ref" type="Ref" required>
+  The shallow ref whose tied effects should be executed.
+</ParamField>
+
+**Type:**
+```typescript
+function triggerRef(ref: Ref): void
+```
+
+**Returns:** `void`
+
+**Example:**
+```javascript
+import { shallowRef, triggerRef, watchEffect } from 'vue'
+
+const shallow = shallowRef({
+  greet: 'Hello, world'
+})
+
+// Logs "Hello, world" once for the first run-through
+watchEffect(() => {
+  console.log(shallow.value.greet)
+})
+
+// This won't trigger the effect because the ref is shallow
+shallow.value.greet = 'Hello, universe'
+
+// Logs "Hello, universe"
+triggerRef(shallow)
+```
+
+**Details:**
+- Used in conjunction with `shallowRef()` to manually trigger effects after deep mutations
+- Not needed for normal refs - they automatically trigger when mutated
+
+**See also:**
+- [shallowRef()](#shallowref)
+
+---
+
+## customRef()
+
+Creates a customized ref with explicit control over its dependency tracking and updates triggering.
+
+<ParamField path="factory" type="CustomRefFactory<T>" required>
+  A factory function that receives `track` and `trigger` callbacks and returns an object with `get` and `set` methods.
+</ParamField>
+
+**Type:**
+```typescript
+function customRef<T>(factory: CustomRefFactory<T>): Ref<T>
+
+type CustomRefFactory<T> = (
+  track: () => void,
+  trigger: () => void
+) => {
+  get: () => T
+  set: (value: T) => void
+}
+```
+
+**Returns:** `Ref<T>` - A custom ref object
+
+**Example:**
+```javascript
+import { customRef } from 'vue'
+
+// Create a debounced ref that only updates after a delay
+function useDebouncedRef(value, delay = 200) {
+  let timeout
+  return customRef((track, trigger) => {
+    return {
+      get() {
+        track()
+        return value
+      },
+      set(newValue) {
+        clearTimeout(timeout)
+        timeout = setTimeout(() => {
+          value = newValue
+          trigger()
+        }, delay)
+      }
+    }
+  })
+}
+
+const text = useDebouncedRef('hello')
+```
+
+**Details:**
+- `track()` should be called inside the `get()` method to register the dependency
+- `trigger()` should be called inside the `set()` method to trigger effects
+- Provides fine-grained control over when dependency tracking and effect triggering occur
+- Useful for implementing custom reactive behaviors like debouncing, throttling, or async updates
+
+**See also:**
+- [Guide - customRef](/api/reactivity-advanced#customref)
+
+---
+
+## shallowReactive()
+
+Shallow version of `reactive()`. Unlike `reactive()`, there is no deep conversion: only root-level properties are reactive.
+
+<ParamField path="target" type="T extends object" required>
+  The source object to make shallowly reactive.
+</ParamField>
+
+**Type:**
+```typescript
+function shallowReactive<T extends object>(
+  target: T
+): ShallowReactive<T>
+
+type ShallowReactive<T> = T & { [ShallowReactiveMarker]?: true }
+```
+
+**Returns:** `ShallowReactive<T>` - A shallow reactive proxy
+
+**Example:**
+```javascript
+import { shallowReactive, isReactive } from 'vue'
+
+const state = shallowReactive({
+  foo: 1,
+  nested: {
+    bar: 2
+  }
+})
+
+// mutating state's own properties is reactive
+state.foo++
+
+// ...but does not convert nested objects
+isReactive(state.nested) // false
+
+// NOT reactive
+state.nested.bar++
+```
+
+**Details:**
+- Only root-level properties are made reactive
+- Property values are stored and exposed as-is
+- Properties with ref values will not be automatically unwrapped
+- Use for performance optimization when you only need reactivity at the root level
+
+**Warning:**
+- Shallow data structures should only be used for root level state in a component
+- Avoid nesting them inside deep reactive objects as it creates inconsistent reactivity behavior
+
+**See also:**
+- [Guide - Reduce Reactivity Overhead for Large Immutable Structures](/guide/best-practices/performance#reduce-reactivity-overhead-for-large-immutable-structures)
+
+---
+
+## shallowReadonly()
+
+Shallow version of `readonly()`. Unlike `readonly()`, there is no deep conversion: only root-level properties are made readonly.
+
+<ParamField path="target" type="T extends object" required>
+  The source object to make shallowly readonly.
+</ParamField>
+
+**Type:**
+```typescript
+function shallowReadonly<T extends object>(target: T): Readonly<T>
+```
+
+**Returns:** `Readonly<T>` - A shallow readonly proxy
+
+**Example:**
+```javascript
+import { shallowReadonly, isReadonly } from 'vue'
+
+const state = shallowReadonly({
+  foo: 1,
+  nested: {
+    bar: 2
+  }
+})
+
+// mutating state's own properties will fail
+state.foo++ // warning!
+
+// ...but works on nested objects
+isReadonly(state.nested) // false
+
+// works
+state.nested.bar++
+```
+
+**Details:**
+- Only root-level properties are made readonly
+- Property values are stored and exposed as-is
+- Nested objects remain mutable
+- Properties with ref values will not be automatically unwrapped
+
+---
+
+## effectScope()
+
+Creates an effect scope object which can capture the reactive effects (computed and watchers) created within it so that these effects can be disposed together.
+
+<ParamField path="detached" type="boolean" default="false">
+  If `true`, the scope will not be automatically collected by parent scopes.
+</ParamField>
+
+**Type:**
+```typescript
+function effectScope(detached?: boolean): EffectScope
+
+interface EffectScope {
+  run<T>(fn: () => T): T | undefined
+  stop(): void
+  pause(): void
+  resume(): void
+  readonly active: boolean
+}
+```
+
+**Returns:** `EffectScope` - An effect scope instance
+
+**Example:**
+```javascript
+import { effectScope, ref, computed, watch } from 'vue'
+
+const scope = effectScope()
+
+scope.run(() => {
+  const count = ref(0)
+  const doubled = computed(() => count.value * 2)
+  
+  watch(count, () => console.log(count.value))
+  
+  count.value++ // logs: 1
+})
+
+// dispose all effects in the scope
+scope.stop()
+```
+
+**Nested scopes:**
+```javascript
+const scope = effectScope()
+
+scope.run(() => {
+  const doubled = computed(() => counter.value * 2)
+
+  // not attached to parent scope, will not be disposed
+  // when parent scope stops
+  effectScope(true).run(() => {
+    watch(doubled, () => console.log(doubled.value))
+  })
+})
+
+// stop all effects, including nested scopes
+scope.stop()
+```
+
+**Details:**
+- Captures reactive effects (computed refs, watchers) created within the scope
+- All effects can be disposed together by calling `scope.stop()`
+- Useful for organizing and cleaning up side effects in composables
+- Nested scopes are automatically collected by parent scopes unless detached
+- Provides `pause()` and `resume()` methods for temporarily suspending effects
+
+**See also:**
+- [Guide - effectScope](/api/reactivity-advanced#effect-scope)
+- [RFC](https://github.com/vuejs/rfcs/blob/master/active-rfcs/0041-reactivity-effect-scope.md)
+
+---
+
+## getCurrentScope()
+
+Returns the current active effect scope if there is one.
+
+**Type:**
+```typescript
+function getCurrentScope(): EffectScope | undefined
+```
+
+**Returns:** `EffectScope | undefined` - The current active effect scope or `undefined`
+
+**Example:**
+```javascript
+import { effectScope, getCurrentScope } from 'vue'
+
+const scope = effectScope()
+
+scope.run(() => {
+  const currentScope = getCurrentScope()
+  console.log(currentScope === scope) // true
+})
+
+const noScope = getCurrentScope()
+console.log(noScope) // undefined
+```
+
+**Details:**
+- Returns `undefined` if called outside of an effect scope
+- Useful for conditionally registering effects or cleanup callbacks based on scope context
+
+**See also:**
+- [effectScope()](#effectscope)
+
+---
+
+## onScopeDispose()
+
+Registers a dispose callback on the current active effect scope. The callback will be invoked when the associated effect scope is stopped.
+
+<ParamField path="fn" type="() => void" required>
+  The cleanup callback function to register.
+</ParamField>
+
+<ParamField path="failSilently" type="boolean" default="false">
+  If `true`, will not throw a warning when called without an active effect scope.
+</ParamField>
+
+**Type:**
+```typescript
+function onScopeDispose(fn: () => void, failSilently?: boolean): void
+```
+
+**Returns:** `void`
+
+**Example:**
+```javascript
+import { effectScope, onScopeDispose } from 'vue'
+
+const scope = effectScope()
+
+scope.run(() => {
+  onScopeDispose(() => {
+    console.log('scope is being disposed')
+  })
+})
+
+scope.stop() // logs: "scope is being disposed"
+```
+
+**Use in composables:**
+```javascript
+export function useMouse() {
+  const x = ref(0)
+  const y = ref(0)
+
+  function handler(e) {
+    x.value = e.x
+    y.value = e.y
+  }
+
+  window.addEventListener('mousemove', handler)
+  
+  onScopeDispose(() => {
+    window.removeEventListener('mousemove', handler)
+  })
+
+  return { x, y }
+}
+```
+
+**Details:**
+- Similar to `onUnmounted()` in component lifecycle, but works with effect scopes
+- Can be called multiple times to register multiple cleanup callbacks
+- Throws a warning in development if called without an active scope (unless `failSilently` is true)
+- Useful for cleanup logic in composables that may be used outside of component contexts
+
+**See also:**
+- [effectScope()](#effectscope)
+- [Guide - Composables](/reusability/composables)

@@ -1,0 +1,220 @@
+---
+title: Creating Applications
+description: Learn how to create and mount Vue applications using createApp and createSSRApp from the runtime-dom package.
+---
+
+Every Vue application starts by creating an application instance with the `createApp` function.
+
+## Creating an Application
+
+The `createApp` function is exported from the `vue` package (specifically from `@vue/runtime-dom`):
+
+```typescript
+import { createApp } from 'vue'
+import App from './App.vue'
+
+const app = createApp(App)
+```
+
+### API Signature
+
+Based on the source code at `packages/runtime-dom/src/index.ts:98-146`, the `createApp` function:
+
+```typescript
+type CreateAppFunction<HostElement> = (
+  rootComponent: Component,
+  rootProps?: Data | null
+) => App<HostElement>
+```
+
+<ParamField path="rootComponent" type="Component" required>
+  The root component object or options that will serve as the starting point for rendering.
+</ParamField>
+
+<ParamField path="rootProps" type="object">
+  Props to pass to the root component (optional).
+</ParamField>
+
+## Mounting the Application
+
+The application instance exposes a `.mount()` method that renders the root component into a DOM container:
+
+<Steps>
+  <Step title="Create the app instance">
+    ```typescript
+    const app = createApp(App)
+    ```
+  </Step>
+
+  <Step title="Mount to a container">
+    ```typescript
+    app.mount('#app')
+    ```
+    
+    The mount method accepts either:
+    - A CSS selector string (e.g., `'#app'`)
+    - An actual DOM element
+    - A ShadowRoot
+  </Step>
+</Steps>
+
+### Mount Implementation Details
+
+From `packages/runtime-dom/src/index.ts:106-143`, the mount method:
+
+1. Normalizes the container (finds element if string selector provided)
+2. Uses the container's innerHTML as template if component has no render function or template
+3. Clears the container content
+4. Mounts the component and returns the component proxy
+
+```typescript
+app.mount = (containerOrSelector: Element | ShadowRoot | string): any => {
+  const container = normalizeContainer(containerOrSelector)
+  if (!container) return
+
+  const component = app._component
+  if (!isFunction(component) && !component.render && !component.template) {
+    component.template = container.innerHTML
+  }
+
+  container.textContent = ''
+  const proxy = mount(container, false, resolveRootNamespace(container))
+  if (container instanceof Element) {
+    container.removeAttribute('v-cloak')
+    container.setAttribute('data-v-app', '')
+  }
+  return proxy
+}
+```
+
+<Warning>
+  If the mount target selector returns null, Vue will warn in development mode and the mount will fail silently.
+</Warning>
+
+## SSR Applications
+
+For server-side rendering with hydration, use `createSSRApp` instead:
+
+```typescript
+import { createSSRApp } from 'vue'
+
+const app = createSSRApp(App)
+app.mount('#app') // This will hydrate the server-rendered HTML
+```
+
+### Difference from createApp
+
+From `packages/runtime-dom/src/index.ts:148-165`:
+
+- `createSSRApp` uses the hydration renderer instead of the regular renderer
+- The mount method passes `true` as the hydration flag
+- This enables client-side hydration of server-rendered markup
+
+```typescript
+app.mount = (containerOrSelector: Element | ShadowRoot | string): any => {
+  const container = normalizeContainer(containerOrSelector)
+  if (container) {
+    return mount(container, true, resolveRootNamespace(container))
+  }
+}
+```
+
+## Application Configuration
+
+Before mounting, you can configure the application instance:
+
+<CodeGroup>
+```typescript Global Properties
+app.config.globalProperties.$http = axios
+
+// Now available in all components
+this.$http.get('/api/data')
+```
+
+```typescript Error Handler
+app.config.errorHandler = (err, instance, info) => {
+  console.error('Global error:', err)
+  console.log('Component instance:', instance)
+  console.log('Error info:', info)
+}
+```
+
+```typescript Performance
+app.config.performance = true // Enable component init, compile, render and patch performance tracing
+```
+</CodeGroup>
+
+## Using Plugins
+
+Plugins extend Vue with additional functionality:
+
+```typescript
+import { createApp } from 'vue'
+import App from './App.vue'
+import router from './router'
+import store from './store'
+
+const app = createApp(App)
+
+app.use(router)
+app.use(store)
+
+app.mount('#app')
+```
+
+<Tip>
+  Chain multiple configuration calls before mounting:
+  ```typescript
+  createApp(App)
+    .use(router)
+    .use(store)
+    .mount('#app')
+  ```
+</Tip>
+
+## Multiple Application Instances
+
+You can create multiple Vue applications on the same page:
+
+```typescript
+const app1 = createApp(App1)
+app1.mount('#app1')
+
+const app2 = createApp(App2)
+app2.mount('#app2')
+```
+
+Each application instance is independent with its own:
+- Global configuration
+- Global components
+- Global directives
+- Plugins
+
+## Namespace Resolution
+
+From `packages/runtime-dom/src/index.ts:167-179`, Vue automatically detects the proper namespace:
+
+```typescript
+function resolveRootNamespace(container: Element | ShadowRoot): ElementNamespace {
+  if (container instanceof SVGElement) {
+    return 'svg'
+  }
+  if (typeof MathMLElement === 'function' && container instanceof MathMLElement) {
+    return 'mathml'
+  }
+}
+```
+
+This ensures proper rendering of SVG and MathML elements.
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Component Basics" icon="puzzle-piece" href="/essentials/components-basics">
+    Learn about creating and using components
+  </Card>
+  
+  <Card title="Lifecycle Hooks" icon="clock" href="/essentials/lifecycle-hooks">
+    Understand component lifecycle
+  </Card>
+</CardGroup>

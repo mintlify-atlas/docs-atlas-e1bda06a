@@ -1,0 +1,503 @@
+---
+title: Testing
+description: Testing strategies, tools, and best practices for Vue.js applications
+---
+
+# Testing
+
+Testing is crucial for maintaining code quality and preventing regressions. Vue provides excellent support for various testing strategies, from unit tests to end-to-end tests.
+
+## Testing Strategy
+
+A comprehensive testing strategy typically includes:
+
+- **Unit Tests** - Test individual components and functions in isolation
+- **Component Tests** - Test components with their dependencies
+- **Integration Tests** - Test how multiple components work together
+- **End-to-End Tests** - Test complete user workflows in a real browser
+
+## Vitest - Fast Unit Testing
+
+Vue core uses Vitest (version 4.0.18) as its test runner. Vitest is a blazing-fast unit test framework powered by Vite.
+
+### Installation
+
+```bash
+npm install -D vitest @vue/test-utils jsdom
+```
+
+### Configuration
+
+Vue core's `vitest.config.ts` configuration:
+
+```ts
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  define: {
+    __DEV__: true,
+    __TEST__: true,
+    __VERSION__: '"test"',
+    __BROWSER__: false,
+    __GLOBAL__: false,
+    __ESM_BUNDLER__: true,
+    __ESM_BROWSER__: false,
+    __CJS__: true,
+    __SSR__: true,
+    __FEATURE_OPTIONS_API__: true,
+    __FEATURE_SUSPENSE__: true,
+    __FEATURE_PROD_DEVTOOLS__: false,
+    __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__: false,
+    __COMPAT__: true,
+  },
+  test: {
+    globals: true,
+    pool: 'threads',
+    setupFiles: 'scripts/setup-vitest.ts',
+    environment: 'node',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      include: ['packages/*/src/**'],
+      exclude: [
+        'packages/vue-compat/**',
+        'packages/vue/src/dev.ts',
+        'packages/runtime-core/src/profiling.ts',
+      ],
+    },
+  },
+})
+```
+
+### Test Projects
+
+Vue core uses multiple test projects:
+
+```ts
+projects: [
+  {
+    extends: true,
+    test: {
+      name: 'unit',
+      exclude: [
+        ...configDefaults.exclude,
+        '**/e2e/**',
+        '**/{vue,vue-compat,runtime-dom}/**',
+      ],
+    },
+  },
+  {
+    extends: true,
+    test: {
+      name: 'unit-jsdom',
+      include: ['packages/{vue,vue-compat,runtime-dom}/**/*.spec.*'],
+      environment: 'jsdom',
+    },
+  },
+  {
+    extends: true,
+    test: {
+      name: 'e2e',
+      environment: 'jsdom',
+      isolate: true,
+      include: ['packages/vue/__tests__/e2e/*.spec.ts'],
+    },
+  },
+]
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+npm run test
+
+# Run unit tests only
+npm run test-unit
+
+# Run e2e tests
+npm run test-e2e
+
+# Run with coverage
+npm run test-coverage
+
+# Watch mode
+npm run test -- --watch
+```
+
+## Writing Unit Tests
+
+### Basic Test Structure
+
+```ts
+import { describe, it, expect } from 'vitest'
+import { ref, computed } from 'vue'
+
+describe('reactive system', () => {
+  it('should make object reactive', () => {
+    const count = ref(0)
+    expect(count.value).toBe(0)
+    
+    count.value++
+    expect(count.value).toBe(1)
+  })
+  
+  it('should compute derived values', () => {
+    const count = ref(2)
+    const double = computed(() => count.value * 2)
+    
+    expect(double.value).toBe(4)
+    
+    count.value = 3
+    expect(double.value).toBe(6)
+  })
+})
+```
+
+### Custom Matchers
+
+Vue core defines custom matchers in `scripts/setup-vitest.ts`:
+
+```ts
+interface CustomMatchers<R = unknown> {
+  toHaveBeenWarned(): R
+  toHaveBeenWarnedLast(): R
+  toHaveBeenWarnedTimes(n: number): R
+}
+
+expect.extend({
+  toHaveBeenWarned(received: string) {
+    const passed = warn.mock.calls.some(args => args[0].includes(received))
+    if (passed) {
+      return {
+        pass: true,
+        message: () => `expected "${received}" not to have been warned.`,
+      }
+    } else {
+      return {
+        pass: false,
+        message: () => `expected "${received}" to have been warned`,
+      }
+    }
+  },
+})
+```
+
+Usage:
+
+```ts
+it('should warn when...', () => {
+  // Trigger warning
+  someFunction()
+  
+  expect('Invalid prop type').toHaveBeenWarned()
+})
+```
+
+### Test Setup
+
+The `beforeEach` and `afterEach` hooks manage test state:
+
+```ts
+let warn: MockInstance
+const asserted: Set<string> = new Set()
+
+beforeEach(() => {
+  asserted.clear()
+  warn = vi.spyOn(console, 'warn')
+  warn.mockImplementation(() => {})
+})
+
+afterEach(() => {
+  const nonAssertedWarnings = warn.mock.calls
+    .map(args => args[0])
+    .filter(received => {
+      return !Array.from(asserted).some(assertedMsg => {
+        return received.includes(assertedMsg)
+      })
+    })
+  warn.mockRestore()
+  if (nonAssertedWarnings.length) {
+    throw new Error(
+      `test case threw unexpected warnings:\n - ${nonAssertedWarnings.join('\n - ')}`,
+    )
+  }
+})
+```
+
+## Component Testing
+
+### Vue Test Utils
+
+Vue's official testing library:
+
+```bash
+npm install -D @vue/test-utils
+```
+
+### Mounting Components
+
+```ts
+import { mount } from '@vue/test-utils'
+import MyComponent from './MyComponent.vue'
+
+it('renders properly', () => {
+  const wrapper = mount(MyComponent, {
+    props: {
+      msg: 'Hello Vitest'
+    }
+  })
+  
+  expect(wrapper.text()).toContain('Hello Vitest')
+})
+```
+
+### Testing User Interactions
+
+```ts
+import { mount } from '@vue/test-utils'
+import Counter from './Counter.vue'
+
+it('increments count when button is clicked', async () => {
+  const wrapper = mount(Counter)
+  
+  expect(wrapper.text()).toContain('Count: 0')
+  
+  await wrapper.find('button').trigger('click')
+  
+  expect(wrapper.text()).toContain('Count: 1')
+})
+```
+
+### Testing Props
+
+```ts
+it('accepts and displays title prop', () => {
+  const wrapper = mount(MyComponent, {
+    props: {
+      title: 'Test Title'
+    }
+  })
+  
+  expect(wrapper.find('h1').text()).toBe('Test Title')
+})
+```
+
+### Testing Emitted Events
+
+```ts
+it('emits custom event when button is clicked', async () => {
+  const wrapper = mount(MyComponent)
+  
+  await wrapper.find('button').trigger('click')
+  
+  expect(wrapper.emitted()).toHaveProperty('custom-event')
+  expect(wrapper.emitted('custom-event')).toHaveLength(1)
+  expect(wrapper.emitted('custom-event')[0]).toEqual([{ id: 1 }])
+})
+```
+
+### Testing Slots
+
+```ts
+it('renders slot content', () => {
+  const wrapper = mount(MyComponent, {
+    slots: {
+      default: 'Slot content',
+      header: '<div>Header content</div>'
+    }
+  })
+  
+  expect(wrapper.text()).toContain('Slot content')
+  expect(wrapper()).toContain('<div>Header content</div>')
+})
+```
+
+### Mocking Dependencies
+
+```ts
+import { mount } from '@vue/test-utils'
+import { vi } from 'vitest'
+import MyComponent from './MyComponent.vue'
+
+it('calls API on mount', () => {
+  const mockFetch = vi.fn()
+  global.fetch = mockFetch
+  
+  mount(MyComponent)
+  
+  expect(mockFetch).toHaveBeenCalledWith('/api/data')
+})
+```
+
+### Testing with Composition API
+
+```ts
+import { mount } from '@vue/test-utils'
+import { ref } from 'vue'
+
+it('works with composition API', async () => {
+  const wrapper = mount({
+    setup() {
+      const count = ref(0)
+      const increment = () => count.value++
+      return { count, increment }
+    },
+    template: `
+      <div>
+        <span>{{ count }}</span>
+        <button @click="increment">Increment</button>
+      </div>
+    `
+  })
+  
+  expect(wrapper.find('span').text()).toBe('0')
+  
+  await wrapper.find('button').trigger('click')
+  
+  expect(wrapper.find('span').text()).toBe('1')
+})
+```
+
+## Testing with Plugins
+
+### Testing with Router
+
+```ts
+import { mount } from '@vue/test-utils'
+import { createRouter, createMemoryHistory } from 'vue-router'
+import MyComponent from './MyComponent.vue'
+
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [{ path: '/', component: MyComponent }]
+})
+
+await router.push('/')
+await router.isReady()
+
+const wrapper = mount(MyComponent, {
+  global: {
+    plugins: [router]
+  }
+})
+```
+
+### Testing with Pinia
+
+```ts
+import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import MyComponent from './MyComponent.vue'
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+})
+
+it('works with pinia', () => {
+  const wrapper = mount(MyComponent, {
+    global: {
+      plugins: [createPinia()]
+    }
+  })
+  
+  // Test component behavior
+})
+```
+
+## Snapshot Testing
+
+```ts
+import { mount } from '@vue/test-utils'
+import MyComponent from './MyComponent.vue'
+
+it('matches snapshot', () => {
+  const wrapper = mount(MyComponent, {
+    props: { msg: 'Hello' }
+  })
+  
+  expect(wrapper()).toMatchSnapshot()
+})
+```
+
+## Coverage Reports
+
+Generate coverage reports:
+
+```bash
+npm run test-coverage
+```
+
+Vue core's coverage configuration:
+
+```ts
+coverage: {
+  provider: 'v8',
+  reporter: ['text', 'html'],
+  include: ['packages/*/src/**'],
+  exclude: [
+    'packages/vue-compat/**',
+    'packages/vue/src/dev.ts',
+    'packages/runtime-core/src/profiling.ts',
+  ],
+}
+```
+
+## End-to-End Testing
+
+### Playwright
+
+For E2E testing, Playwright is recommended:
+
+```bash
+npm install -D @playwright/test
+```
+
+```ts
+import { test, expect } from '@playwright/test'
+
+test('basic navigation', async ({ page }) => {
+  await page.goto('http://localhost:3000')
+  await page.click('text=About')
+  await expect(page).toHaveURL('http://localhost:3000/about')
+  await expect(page.locator('h1')).toContainText('About')
+})
+```
+
+### Cypress
+
+Alternatively, use Cypress:
+
+```bash
+npm install -D cypress
+```
+
+```js
+describe('My App', () => {
+  it('navigates to about page', () => {
+    cy.visit('/')
+    cy.contains('About').click()
+    cy.url().should('include', '/about')
+    cy.get('h1').should('contain', 'About')
+  })
+})
+```
+
+## Best Practices
+
+1. **Test behavior, not implementation** - Focus on what users see and do
+2. **Keep tests simple and focused** - One assertion per test when possible
+3. **Use meaningful test descriptions** - Describe what the test verifies
+4. **Mock external dependencies** - Keep tests fast and isolated
+5. **Test edge cases** - Don't just test the happy path
+6. **Maintain test coverage** - Aim for 80%+ coverage on critical paths
+7. **Run tests in CI/CD** - Catch regressions before they reach production
+8. **Use TypeScript in tests** - Leverage type safety
+
+## Resources
+
+- [Vitest Documentation](https://vitest.dev/)
+- [Vue Test Utils Documentation](https://test-utils.vuejs.org/)
+- [Testing Guide](https://vuejs.org/guide/scaling-up/testing)
+- [Playwright Documentation](https://playwright.dev/)
+- [Cypress Documentation](https://www.cypress.io/)

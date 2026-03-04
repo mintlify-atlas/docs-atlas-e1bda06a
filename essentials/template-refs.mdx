@@ -1,0 +1,549 @@
+---
+title: Template Refs
+description: Learn how to access DOM elements and child component instances using template refs in Vue 3.
+---
+
+Template refs allow you to obtain direct references to specific DOM elements or child component instances after they are mounted.
+
+## Basic Ref Usage
+
+Use the `ref` attribute to obtain a reference to an element:
+
+```vue
+<template>
+  <input ref="inputRef" />
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+
+const inputRef = ref(null)
+
+onMounted(() => {
+  // Access the input element
+  inputRef.value.focus()
+})
+</script>
+```
+
+<Note>
+  The ref can only be accessed after the component is mounted. If you try to access it in the template expression, it will be `null` on the first render.
+</Note>
+
+## useTemplateRef API
+
+From `packages/runtime-core/src/helpers/useTemplateRef.ts:10-37`, Vue 3.5+ provides `useTemplateRef` for type-safe refs:
+
+```vue
+<template>
+  <input ref="input" />
+</template>
+
+<script setup>
+import { useTemplateRef, onMounted } from 'vue'
+
+const input = useTemplateRef('input')
+
+onMounted(() => {
+  input.value?.focus()
+})
+</script>
+```
+
+### API Implementation
+
+From the source code:
+
+```typescript
+export type TemplateRef<T = unknown> = Readonly<ShallowRef<T | null>>
+
+export function useTemplateRef<T = unknown, Keys extends string = string>(
+  key: Keys
+): TemplateRef<T> {
+  const i = getCurrentInstance()
+  const r = shallowRef(null)
+  
+  if (i) {
+    const refs = i.refs === EMPTY_OBJ ? (i.refs = {}) : i.refs
+    
+    Object.defineProperty(refs, key, {
+      enumerable: true,
+      get: () => r.value,
+      set: val => (r.value = val)
+    })
+  } else if (__DEV__) {
+    warn(
+      `useTemplateRef() is called when there is no active component ` +
+        `instance to be associated with.`
+    )
+  }
+  
+  const ret = __DEV__ ? readonly(r) : r
+  return ret
+}
+```
+
+<ParamField path="key" type="string" required>
+  The ref name matching the `ref` attribute in the template
+</ParamField>
+
+<ParamField path="return" type="TemplateRef<T>">
+  A readonly shallow ref that will be populated when the component mounts
+</ParamField>
+
+## Ref on Component
+
+Access a child component instance:
+
+<CodeGroup>
+```vue Parent.vue
+<template>
+  <ChildComponent ref="childRef" />
+  <button @click="callChildMethod">Call Child Method</button>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import ChildComponent from './ChildComponent.vue'
+
+const childRef = ref(null)
+
+function callChildMethod() {
+  childRef.value?.someMethod()
+}
+</script>
+```
+
+```vue ChildComponent.vue
+<template>
+  <div>Child Component</div>
+</template>
+
+<script setup>
+import { defineExpose } from 'vue'
+
+function someMethod() {
+  console.log('Method called from parent')
+}
+
+// Expose methods to parent
+defineExpose({
+  someMethod
+})
+</script>
+```
+</CodeGroup>
+
+<Warning>
+  When using `<script setup>`, components are closed by default. You must explicitly expose properties and methods using `defineExpose()` for parent components to access them.
+</Warning>
+
+## Ref in v-for
+
+When used with `v-for`, the ref will be an array:
+
+```vue
+<template>
+  <ul>
+    <li v-for="item in list" :key="item.id" ref="itemRefs">
+      {{ item.text }}
+    </li>
+  </ul>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+
+const list = ref([
+  { id: 1, text: 'Item 1' },
+  { id: 2, text: 'Item 2' },
+  { id: 3, text: 'Item 3' }
+])
+
+const itemRefs = ref([])
+
+onMounted(() => {
+  console.log(itemRefs.value) // Array of li elements
+  itemRefs.value.forEach((el, index) => {
+    console.log(`Item ${index}:`, el.textContent)
+  })
+})
+</script>
+```
+
+<Note>
+  The ref array does not guarantee the same order as the source array. If items are reordered, the ref array order may not match.
+</Note>
+
+## Function Refs
+
+Use a function to receive the element reference:
+
+```vue
+<template>
+  <input :ref="(el) => { inputRef = el }" />
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+
+let inputRef = null
+
+onMounted(() => {
+  console.log(inputRef) // The input element
+})
+</script>
+```
+
+Function refs are useful when:
+- You need dynamic ref names
+- You want to perform setup when the element is mounted
+- You're working with v-for and need more control
+
+## Dynamic Refs
+
+Bind refs dynamically:
+
+```vue
+<template>
+  <input :ref="setRef" />
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const inputRef = ref(null)
+
+function setRef(el) {
+  inputRef.value = el
+  if (el) {
+    // Element is mounted
+    el.focus()
+  } else {
+    // Element is unmounted
+    console.log('Element unmounted')
+  }
+}
+</script>
+```
+
+## Ref Timing
+
+Template refs are set after the component is mounted and updated:
+
+```vue
+<template>
+  <div ref="divRef">{{ count }}</div>
+  <button @click="count++">Increment</button>
+</template>
+
+<script setup>
+import { ref, watch, watchEffect, onMounted } from 'vue'
+
+const count = ref(0)
+const divRef = ref(null)
+
+// Won't work - ref is null during setup
+console.log(divRef.value) // null
+
+// Works - ref is available after mount
+onMounted(() => {
+  console.log(divRef.value) // <div>0</div>
+})
+
+// Updates after each render
+watchEffect(() => {
+  if (divRef.value) {
+    console.log('Div content:', divRef.value.textContent)
+  }
+})
+</script>
+```
+
+<Steps>
+  <Step title="Template rendered">
+    Vue renders the template
+  </Step>
+  
+  <Step title="Refs populated">
+    Template refs are populated with element references
+  </Step>
+  
+  <Step title="onMounted called">
+    The `onMounted` hook is called and refs are accessible
+  </Step>
+</Steps>
+
+## Accessing Refs in Templates
+
+You can access refs directly in templates, but they may be null initially:
+
+```vue
+<template>
+  <input ref="input" />
+  <!-- Use optional chaining -->
+  <p>Input type: {{ input?.type }}</p>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const input = ref(null)
+</script>
+```
+
+## Common Use Cases
+
+### Focus Management
+
+```vue
+<template>
+  <div>
+    <input ref="nameInput" v-model="name" />
+    <input ref="emailInput" v-model="email" />
+    <button @click="focusName">Focus Name</button>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const name = ref('')
+const email = ref('')
+const nameInput = ref(null)
+const emailInput = ref(null)
+
+function focusName() {
+  nameInput.value?.focus()
+}
+
+// Auto-focus on mount
+onMounted(() => {
+  nameInput.value?.focus()
+})
+</script>
+```
+
+### Measuring Elements
+
+```vue
+<template>
+  <div ref="boxRef" class="box">
+    Resize the window
+  </div>
+  <p>Width: {{ width }}px, Height: {{ height }}px</p>
+</template>
+
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue'
+
+const boxRef = ref(null)
+const width = ref(0)
+const height = ref(0)
+
+function updateSize() {
+  if (boxRef.value) {
+    const rect = boxRef.value.getBoundingClientRect()
+    width.value = rect.width
+    height.value = rect.height
+  }
+}
+
+onMounted(() => {
+  updateSize()
+  window.addEventListener('resize', updateSize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateSize)
+})
+</script>
+```
+
+### Integrating Third-Party Libraries
+
+```vue
+<template>
+  <div ref="chartContainer"></div>
+</template>
+
+<script setup>
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import Chart from 'chart.js'
+
+const chartContainer = ref(null)
+const data = ref([10, 20, 30, 40, 50])
+let chartInstance = null
+
+onMounted(() => {
+  if (chartContainer.value) {
+    chartInstance = new Chart(chartContainer.value, {
+      type: 'line',
+      data: {
+        labels: ['A', 'B', 'C', 'D', 'E'],
+        datasets: [{
+          label: 'My Data',
+          data: data.value
+        }]
+      }
+    })
+  }
+})
+
+watch(data, (newData) => {
+  if (chartInstance) {
+    chartInstance.data.datasets[0].data = newData
+    chartInstance.update()
+  }
+}, { deep: true })
+
+onUnmounted(() => {
+  if (chartInstance) {
+    chartInstance.destroy()
+  }
+})
+</script>
+```
+
+### Scroll to Element
+
+```vue
+<template>
+  <div>
+    <button @click="scrollToBottom">Scroll to Bottom</button>
+    <div class="content">
+      <p v-for="i in 50" :key="i">Line {{ i }}</p>
+      <div ref="bottomRef">Bottom</div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const bottomRef = ref(null)
+
+function scrollToBottom() {
+  bottomRef.value?.scrollIntoView({ behavior: 'smooth' })
+}
+</script>
+```
+
+## Refs with TypeScript
+
+Type template refs properly:
+
+```vue
+<template>
+  <input ref="inputRef" />
+  <MyComponent ref="componentRef" />
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
+import MyComponent from './MyComponent.vue'
+
+// Type as HTMLInputElement
+const inputRef = ref<HTMLInputElement | null>(null)
+
+// Type as component instance
+const componentRef = ref<InstanceType<typeof MyComponent> | null>(null)
+
+onMounted(() => {
+  // TypeScript knows the types
+  inputRef.value?.focus() // OK
+  componentRef.value?.someMethod() // OK with defineExpose
+})
+</script>
+```
+
+## Refs in Options API
+
+For reference, refs in Options API are accessed via `this.$refs`:
+
+```vue
+<template>
+  <input ref="input" />
+</template>
+
+<script>
+export default {
+  mounted() {
+    this.$refs.input.focus()
+  },
+  methods: {
+    focusInput() {
+      this.$refs.input.focus()
+    }
+  }
+}
+</script>
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Access refs after mounting">
+    Template refs are only populated after the component is mounted. Use `onMounted` or later lifecycle hooks.
+    
+    ```typescript
+    // Bad
+    const input = ref(null)
+    input.value.focus() // Error: null
+    
+    // Good
+    onMounted(() => {
+      input.value?.focus() // Works
+    })
+    ```
+  </Step>
+
+  <Step title="Use refs sparingly">
+    Refs should be used as an escape hatch. Prefer reactive data and declarative rendering over direct DOM manipulation.
+  </Step>
+
+  <Step title="Type your refs">
+    In TypeScript, always type your refs for better IDE support and type safety.
+    
+    ```typescript
+    const input = ref<HTMLInputElement | null>(null)
+    ```
+  </Step>
+
+  <Step title="Clean up external libraries">
+    When using refs with third-party libraries, always clean up in `onUnmounted`.
+  </Step>
+
+  <Step title="Use optional chaining">
+    Always use optional chaining (`?.`) when accessing ref values to handle null cases.
+  </Step>
+</Steps>
+
+## Caveats
+
+<Warning>
+  **Key points to remember:**
+  
+  1. Template refs are `null` until the component is mounted
+  2. Refs in `v-for` are arrays and order is not guaranteed
+  3. Component refs require `defineExpose()` in `<script setup>`
+  4. Refs are shallow - they don't trigger reactivity on nested property changes
+  5. Avoid direct DOM manipulation when possible - use Vue's reactivity system
+</Warning>
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Lifecycle Hooks" icon="clock" href="/essentials/lifecycle-hooks">
+    Access refs after mounting
+  </Card>
+  
+  <Card title="Components Basics" icon="puzzle-piece" href="/essentials/components-basics">
+    Component refs and communication
+  </Card>
+  
+  <Card title="Reactivity Fundamentals" icon="bolt" href="/essentials/reactivity-fundamentals">
+    Understanding ref() and shallowRef()
+  </Card>
+</CardGroup>

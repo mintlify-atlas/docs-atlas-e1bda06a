@@ -1,0 +1,537 @@
+---
+title: Server-Side Rendering (SSR)
+description: Render Vue components on the server for improved performance and SEO
+---
+
+# Server-Side Rendering
+
+Server-Side Rendering (SSR) allows you to render Vue components on the server and send fully-rendered HTML to the client. This improves initial load time, SEO, and provides a better experience for users on slower connections.
+
+## Why SSR?
+
+### Benefits
+
+- **Better SEO** - Search engines can crawl fully-rendered content
+- **Faster Time-to-Content** - Users see content immediately without waiting for JavaScript
+- **Better Performance on Low-End Devices** - Less JavaScript to parse and execute
+- **Social Media Sharing** - Proper meta tags and Open Graph data
+
+### Trade-offs
+
+- **Increased Server Load** - Each request requires rendering
+- **More Complex Setup** - Requires Node.js server and build configuration
+- **Development Constraints** - Some browser APIs are not available during SSR
+- **Higher Hosting Costs** - Need a Node.js server instead of static hosting
+
+## The Server Renderer Package
+
+Vue's `@vue/server-renderer` package (version 3.5.29) provides APIs for rendering Vue components on the server. As of Vue 3.2.13+, this package is included as a dependency of the main `vue` package and can be accessed as `vue/server-renderer`.
+
+## Basic API
+
+### renderToString
+
+Renders a Vue application to an HTML string:
+
+```ts
+function renderToString(
+  input: App | VNode,
+  context?: SSRContext,
+): Promise<string>
+```
+
+**Usage:**
+
+```js
+import { createSSRApp } from 'vue'
+import { renderToString } from '@vue/server-renderer'
+
+const app = createSSRApp({
+  data: () => ({ msg: 'hello' }),
+  template: `<div>{{ msg }}</div>`,
+})
+
+const html = await renderToString(app)
+console.log(html) // <div>hello</div>
+```
+
+### SSR Context
+
+The context object allows you to access additional information:
+
+```js
+const ctx = {}
+const html = await renderToString(app, ctx)
+
+// Access teleported content
+console.log(ctx.teleports) // { '#teleported': 'teleported content' }
+```
+
+## Streaming API
+
+For better performance with large applications, use streaming:
+
+### renderToNodeStream
+
+**Note:** Only available in CommonJS build. Use `pipeToNodeWritable` in ESM.
+
+```ts
+function renderToNodeStream(
+  input: App | VNode,
+  context?: SSRContext
+): Readable
+```
+
+**Usage:**
+
+```js
+import { renderToNodeStream } from '@vue/server-renderer'
+
+// Inside a Node.js http handler
+renderToNodeStream(app).pipe(res)
+```
+
+### pipeToNodeWritable
+
+Render and pipe to a Node.js Writable stream:
+
+```ts
+function pipeToNodeWritable(
+  input: App | VNode,
+  context: SSRContext = {},
+  writable: Writable,
+): void
+```
+
+**Usage:**
+
+```js
+import { pipeToNodeWritable } from '@vue/server-renderer'
+import { createWriteStream } from 'node:fs'
+
+// Inside a Node.js http handler
+pipeToNodeWritable(app, {}, res)
+
+// Or to a file
+const stream = createWriteStream('output')
+pipeToNodeWritable(app, {}, stream)
+```
+
+### renderToWebStream
+
+For modern edge environments (Cloudflare Workers, Deno, etc.):
+
+```ts
+function renderToWebStream(
+  input: App | VNode,
+  context?: SSRContext,
+): ReadableStream
+```
+
+**Usage:**
+
+```js
+import { renderToWebStream } from '@vue/server-renderer'
+
+// In an edge environment with ReadableStream support
+const stream = renderToWebStream(app)
+return new Response(stream, {
+  headers: { 'Content-Type': 'text/html' }
+})
+```
+
+### pipeToWebWritable
+
+For environments with WritableStream:
+
+```ts
+function pipeToWebWritable(
+  input: App | VNode,
+  context: SSRContext = {},
+  writable: WritableStream,
+): void
+```
+
+**Usage:**
+
+```js
+import { pipeToWebWritable } from '@vue/server-renderer'
+
+// TransformStream is available in CloudFlare workers and Node.js
+const { readable, writable } = new TransformStream()
+pipeToWebWritable(app, {}, writable)
+
+return new Response(readable, {
+  headers: { 'Content-Type': 'text/html' }
+})
+```
+
+### renderToSimpleStream
+
+Low-level streaming with custom readable interface:
+
+```ts
+function renderToSimpleStream(
+  input: App | VNode,
+  context: SSRContext,
+  options: SimpleReadable,
+): SimpleReadable
+
+interface SimpleReadable {
+  push(content: string | null): void
+  destroy(err: any): void
+}
+```
+
+**Usage:**
+
+```js
+import { renderToSimpleStream } from '@vue/server-renderer'
+
+let res = ''
+
+renderToSimpleStream(
+  app,
+  {},
+  {
+    push(chunk) {
+      if (chunk === null) {
+        // Rendering complete
+        console.log(`render complete: ${res}`)
+      } else {
+        res += chunk
+      }
+    },
+    destroy(err) {
+      // Error encountered
+      console.error('Render error:', err)
+    },
+  },
+)
+```
+
+## Complete SSR Setup
+
+### Server Entry
+
+Create a server entry point:
+
+```js
+// server.js
+import express from 'express'
+import { createSSRApp } from 'vue'
+import { renderToString } from '@vue/server-renderer'
+import { createApp } from './app.js'
+
+const server = express()
+
+server.get('*', async (req, res) => {
+  const app = createSSRApp(createApp())
+  
+  const ctx = {}
+  const html = await renderToString(app, ctx)
+  
+  const page = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>My SSR App</title>
+      </head>
+      <body>
+        <div id="app">${html}</div>
+        <script type="module" src="/client.js"></script>
+      </body>
+    </html>
+  `
+  
+  res.send(page)
+})
+
+server.listen(3000, () => {
+  console.log('Server running on http://localhost:3000')
+})
+```
+
+### Client Entry
+
+Hydrate the server-rendered HTML:
+
+```js
+// client.js
+import { createSSRApp } from 'vue'
+import { createApp } from './app.js'
+
+const app = createSSRApp(createApp())
+
+app.mount('#app')
+```
+
+### Shared App Creation
+
+```js
+// app.js
+import { h } from 'vue'
+
+export function createApp() {
+  return {
+    data: () => ({ count: 0 }),
+    template: `
+      <div>
+        <h1>Count: {{ count }}</h1>
+        <button @click="count++">Increment</button>
+      </div>
+    `
+  }
+}
+```
+
+## Handling Teleports
+
+Teleports require special handling in SSR:
+
+```js
+const ctx = {}
+const html = await renderToString(app, ctx)
+
+// Inject teleported content into appropriate locations
+const finalHtml = html.replace(
+  '<!--teleport start-->',
+  ctx.teleports['#target']
+)
+```
+
+## Data Prefetching
+
+Fetch data before rendering:
+
+```js
+import { createSSRApp } from 'vue'
+import { renderToString } from '@vue/server-renderer'
+
+const app = createSSRApp({
+  async serverPrefetch() {
+    // This runs only on the server
+    this.data = await fetchData()
+  },
+  data() {
+    return {
+      data: null
+    }
+  }
+})
+
+const html = await renderToString(app)
+```
+
+## State Serialization
+
+Serialize and transfer state to the client:
+
+```js
+// Server
+const state = { user: { id: 1, name: 'John' } }
+const serializedState = JSON.stringify(state)
+
+const html = `
+  <div id="app">${appHtml}</div>
+  <script>
+    window.__INITIAL_STATE__ = ${JSON.stringify(serializedState).replace(
+      /</g,
+      '\\u003c'
+    )}
+  </script>
+`
+
+// Client
+const app = createSSRApp(createApp())
+if (window.__INITIAL_STATE__) {
+  app.config.globalProperties.$state = window.__INITIAL_STATE__
+}
+app.mount('#app')
+```
+
+## SSR with Router
+
+```js
+import { createSSRApp } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { renderToString } from '@vue/server-renderer'
+
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/', component: Home },
+    { path: '/about', component: About }
+  ]
+})
+
+const app = createSSRApp(App)
+app.use(router)
+
+// Push the current URL
+await router.push(req.url)
+await router.isReady()
+
+const html = await renderToString(app)
+```
+
+## SSR with Pinia
+
+```js
+import { createSSRApp } from 'vue'
+import { createPinia } from 'pinia'
+import { renderToString } from '@vue/server-renderer'
+
+const app = createSSRApp(App)
+const pinia = createPinia()
+app.use(pinia)
+
+// Render
+const html = await renderToString(app)
+
+// Serialize state
+const state = JSON.stringify(pinia.state.value)
+```
+
+## Development vs Production
+
+### Development
+
+```js
+import { createServer } from 'vite'
+
+const vite = await createServer({
+  server: { middlewareMode: true },
+  appType: 'custom'
+})
+
+app.use(vite.middlewares)
+
+app.use('*', async (req, res) => {
+  const url = req.originalUrl
+  
+  // Transform and load entry
+  const { render } = await vite.ssrLoadModule('/src/entry-server.js')
+  
+  const html = await render(url)
+  res.send(html)
+})
+```
+
+### Production
+
+Build separate client and server bundles:
+
+```bash
+# Build client
+vite build --outDir dist/client
+
+# Build server
+vite build --outDir dist/server --ssr src/entry-server.js
+```
+
+## Error Handling
+
+```js
+try {
+  const html = await renderToString(app)
+  res.send(html)
+} catch (error) {
+  console.error('SSR error:', error)
+  // Fall back to client-side rendering
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <div id="app"></div>
+        <script type="module" src="/client.js"></script>
+      </body>
+    </html>
+  `)
+}
+```
+
+## Best Practices
+
+1. **Use streaming** for large pages to improve TTFB
+2. **Cache rendered pages** when possible to reduce server load
+3. **Implement proper error handling** with fallback to client-side rendering
+4. **Prefetch critical data** during server-side rendering
+5. **Serialize state properly** to avoid XSS vulnerabilities
+6. **Test both server and client** rendering paths
+7. **Monitor server performance** and optimize bottlenecks
+8. **Use HTTP/2 Server Push** for critical resources
+
+## Common Pitfalls
+
+### Browser APIs
+
+Avoid using browser-only APIs during SSR:
+
+```js
+import { onMounted } from 'vue'
+
+// ❌ Wrong - window not available on server
+const width = window.innerWidth
+
+// ✅ Correct - check if running in browser
+const width = typeof window !== 'undefined' ? window.innerWidth : 0
+
+// ✅ Or use lifecycle hooks
+onMounted(() => {
+  const width = window.innerWidth
+})
+```
+
+### Component Lifecycle
+
+Only `beforeCreate` and `created` run during SSR:
+
+```js
+export default {
+  created() {
+    // Runs on both server and client
+  },
+  mounted() {
+    // Only runs on client
+    console.log('Mounted in browser')
+  }
+}
+```
+
+## Deployment
+
+### Node.js Server
+
+Deploy to any Node.js hosting provider:
+
+```js
+const PORT = process.env.PORT || 3000
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`)
+})
+```
+
+### Edge Functions
+
+Deploy to edge platforms like Cloudflare Workers:
+
+```js
+export default {
+  async fetch(request) {
+    const app = createSSRApp(App)
+    const stream = renderToWebStream(app)
+    
+    return new Response(stream, {
+      headers: { 'Content-Type': 'text/html' }
+    })
+  }
+}
+```
+
+## Resources
+
+- [Server Renderer Source Code](https://github.com/vuejs/core/tree/main/packages/server-renderer)
+- [SSR Guide](https://vuejs.org/scaling-up/ssr)
+- [Nuxt.js](https://nuxt.com/) - Full-featured SSR framework
+- [Vite SSR Plugin](https://github.com/vitejs/vite-plugin-vue/tree/main/playground/ssr-vue)

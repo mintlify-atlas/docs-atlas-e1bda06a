@@ -1,0 +1,456 @@
+---
+title: Routing
+description: Client-side routing with Vue Router for building single-page applications
+---
+
+# Routing
+
+Routing is essential for building single-page applications (SPAs) with multiple views. Vue Router is the official routing library for Vue.js, providing seamless integration with Vue's component system.
+
+## What is Routing?
+
+In a traditional multi-page application, the server determines which HTML page to send based on the URL. In a single-page application, JavaScript handles navigation by:
+
+1. Intercepting link clicks
+2. Updating the URL without a page reload
+3. Rendering the appropriate component based on the current URL
+
+This provides a smoother user experience with instant navigation and preserved application state.
+
+## Vue Router
+
+Vue Router is the official router for Vue.js. It deeply integrates with Vue's core to make building SPAs a breeze.
+
+### Installation
+
+```bash
+npm install vue-router@4
+```
+
+### Basic Setup
+
+```js
+import { createApp } from 'vue'
+import { createRouter, createWebHistory } from 'vue-router'
+import App from './App.vue'
+import Home from './views/Home.vue'
+import About from './views/About.vue'
+
+const routes = [
+  { path: '/', component: Home },
+  { path: '/about', component: About }
+]
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+})
+
+const app = createApp(App)
+app.use(router)
+app.mount('#app')
+```
+
+### Router View
+
+The `<router-view>` component renders the matched component for the current route:
+
+```vue
+<template>
+  <div id="app">
+    <nav>
+      <router-link to="/">Home</router-link>
+      <router-link to="/about">About</router-link>
+    </nav>
+    <router-view />
+  </div>
+</template>
+```
+
+## Route Configuration
+
+### Named Routes
+
+Give routes a name for easier navigation:
+
+```js
+const routes = [
+  {
+    path: '/user/:id',
+    name: 'user',
+    component: User
+  }
+]
+```
+
+```vue
+<router-link :to="{ name: 'user', params: { id: 123 }}">User</router-link>
+```
+
+### Nested Routes
+
+Nest routes to create complex UI structures:
+
+```js
+const routes = [
+  {
+    path: '/user/:id',
+    component: User,
+    children: [
+      { path: 'profile', component: UserProfile },
+      { path: 'posts', component: UserPosts }
+    ]
+  }
+]
+```
+
+### Dynamic Route Matching
+
+Capture URL parameters:
+
+```js
+const routes = [
+  { path: '/user/:id', component: User }
+]
+```
+
+Access parameters in components:
+
+```vue
+<script setup>
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+console.log(route.params.id)
+</script>
+```
+
+### Catch-All Routes
+
+Handle 404 pages:
+
+```js
+const routes = [
+  // ... other routes
+  { path: '/:pathMatch(.*)*', component: NotFound }
+]
+```
+
+## Navigation
+
+### Declarative Navigation
+
+Using `<router-link>`:
+
+```vue
+<router-link to="/about">About</router-link>
+<router-link :to="{ name: 'user', params: { id: 123 }}">User</router-link>
+```
+
+### Programmatic Navigation
+
+Using the router instance:
+
+```vue
+<script setup>
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+function goToAbout() {
+  router.push('/about')
+}
+
+function goBack() {
+  router.go(-1)
+}
+</script>
+```
+
+### Navigation Methods
+
+- `router.push()` - Navigate to a new route
+- `router.replace()` - Navigate without adding history entry
+- `router.go(n)` - Navigate forward or backward in history
+- `router.back()` - Go back one step
+- `router.forward()` - Go forward one step
+
+## Route Guards
+
+### Global Guards
+
+Execute logic before every navigation:
+
+```js
+router.beforeEach((to, from, next) => {
+  if (to.meta.requiresAuth && !isAuthenticated()) {
+    next('/login')
+  } else {
+    next()
+  }
+})
+```
+
+### Per-Route Guards
+
+Define guards in route configuration:
+
+```js
+const routes = [
+  {
+    path: '/admin',
+    component: Admin,
+    beforeEnter: (to, from, next) => {
+      if (!isAdmin()) {
+        next('/')
+      } else {
+        next()
+      }
+    }
+  }
+]
+```
+
+### In-Component Guards
+
+Define guards within components:
+
+```vue
+<script setup>
+import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
+
+onBeforeRouteLeave((to, from) => {
+  const answer = window.confirm('Do you really want to leave?')
+  if (!answer) return false
+})
+
+onBeforeRouteUpdate((to, from) => {
+  // React to route changes while staying in the same component
+})
+</script>
+```
+
+## Route Meta Fields
+
+Attach custom metadata to routes:
+
+```js
+const routes = [
+  {
+    path: '/admin',
+    component: Admin,
+    meta: {
+      requiresAuth: true,
+      title: 'Admin Panel'
+    }
+  }
+]
+```
+
+Access meta fields in guards or components:
+
+```js
+router.beforeEach((to, from) => {
+  document.title = to.meta.title || 'Default Title'
+})
+```
+
+## History Modes
+
+### HTML5 History Mode
+
+Uses the History API for clean URLs:
+
+```js
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+})
+```
+
+Requires server configuration to handle all routes.
+
+### Hash Mode
+
+Uses URL hash for routing (no server configuration needed):
+
+```js
+import { createWebHashHistory } from 'vue-router'
+
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes
+})
+```
+
+### Memory Mode
+
+For server-side rendering or testing:
+
+```js
+import { createMemoryHistory } from 'vue-router'
+
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes
+})
+```
+
+## Lazy Loading Routes
+
+Load routes on demand for better performance:
+
+```js
+const routes = [
+  {
+    path: '/about',
+    component: () => import('./views/About.vue')
+  }
+]
+```
+
+### Named Chunks
+
+Group related routes:
+
+```js
+const routes = [
+  {
+    path: '/admin',
+    component: () => import(/* webpackChunkName: "admin" */ './views/Admin.vue')
+  },
+  {
+    path: '/admin/users',
+    component: () => import(/* webpackChunkName: "admin" */ './views/AdminUsers.vue')
+  }
+]
+```
+
+## Advanced Features
+
+### Scroll Behavior
+
+Customize scroll position on navigation:
+
+```js
+const router = createRouter({
+  history: createWebHistory(),
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    } else {
+      return { top: 0 }
+    }
+  }
+})
+```
+
+### Route Transitions
+
+Animate route changes:
+
+```vue
+<template>
+  <router-view v-slot="{ Component }">
+    <transition name="fade">
+      <component :is="Component" />
+    </transition>
+  </router-view>
+</template>
+
+<style>
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+</style>
+```
+
+### Data Fetching
+
+Fetch data before or after navigation:
+
+```vue
+<script setup>
+import { ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+const data = ref(null)
+
+watch(
+  () => route.params.id,
+  async (id) => {
+    data.value = await fetchData(id)
+  },
+  { immediate: true }
+)
+</script>
+```
+
+### Multiple Router Views
+
+Render multiple components simultaneously:
+
+```js
+const routes = [
+  {
+    path: '/',
+    components: {
+      default: Home,
+      sidebar: Sidebar,
+      footer: Footer
+    }
+  }
+]
+```
+
+```vue
+<template>
+  <router-view />
+  <router-view name="sidebar" />
+  <router-view name="footer" />
+</template>
+```
+
+## Testing
+
+### Mocking the Router
+
+```js
+import { mount } from '@vue/test-utils'
+import { createMemoryHistory, createRouter } from 'vue-router'
+
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [{ path: '/', component: Home }]
+})
+
+await router.push('/')
+await router.isReady()
+
+const wrapper = mount(App, {
+  global: {
+    plugins: [router]
+  }
+})
+```
+
+## Best Practices
+
+1. **Use lazy loading** for large applications to reduce initial bundle size
+2. **Define route names** for easier refactoring and type safety
+3. **Utilize route guards** for authentication and authorization
+4. **Keep route configuration organized** by splitting into modules for large apps
+5. **Use route meta fields** for common route properties
+6. **Handle 404 errors** with catch-all routes
+7. **Configure server** properly when using HTML5 history mode
+
+## Resources
+
+- [Vue Router Documentation](https://router.vuejs.org/)
+- [Vue Router GitHub](https://github.com/vuejs/router)
+- [Migration from Vue 2](https://router.vuejs.org/guide/migration/)

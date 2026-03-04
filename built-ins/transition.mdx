@@ -1,0 +1,256 @@
+---
+title: <Transition>
+description: Apply animations when an element or component is entering and leaving the DOM
+---
+
+The `<Transition>` component provides animated transition effects when elements enter or leave the DOM. It applies CSS classes at different stages of the transition and provides JavaScript hooks for more complex animations.
+
+## Basic Usage
+
+```vue
+<Transition name="fade">
+  <p v-if="show">Hello</p>
+</Transition>
+```
+
+```css
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+```
+
+## Props
+
+### name
+
+- **Type:** `string`
+- **Default:** `'v'`
+
+Used to automatically generate transition CSS class names. For example, `name: 'fade'` will auto expand to `.fade-enter-active`, `.fade-leave-active`, etc.
+
+### type
+
+- **Type:** `'transition' | 'animation'`
+
+Specifies the type of transition events to wait for to determine transition end timing. Available values are `"transition"` and `"animation"`. By default, it will automatically detect the type that has a longer duration.
+
+### css
+
+- **Type:** `boolean`
+- **Default:** `true`
+
+Whether to apply CSS transition classes. If set to `false`, will only trigger JavaScript hooks registered via component events.
+
+### duration
+
+- **Type:** `number | { enter: number; leave: number }`
+
+Specifies explicit transition durations (in milliseconds). By default, Vue waits for the first `transitionend` or `animationend` event on the root transition element.
+
+```vue
+<!-- single duration for both enter and leave -->
+<Transition :duration="500">...</Transition>
+
+<!-- specify separate values for enter and leave -->
+<Transition :duration="{ enter: 500, leave: 800 }">...</Transition>
+```
+
+### mode
+
+- **Type:** `'in-out' | 'out-in' | 'default'`
+
+Controls the timing sequence of leaving/entering transitions.
+
+- `'in-out'`: New element transitions in first, then when complete, the current element transitions out.
+- `'out-in'`: Current element transitions out first, then when complete, the new element transitions in.
+- `'default'`: Both transitions happen simultaneously.
+
+### appear
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Whether to apply transition on initial render. When enabled, separate classes can be used via `appearFromClass`, `appearActiveClass`, and `appearToClass`.
+
+### persisted
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Indicates this is a transition that doesn't actually insert/remove the element, but toggles the show/hidden status instead (e.g., used by `v-show`).
+
+## Transition Classes
+
+Six classes are applied for enter/leave transitions:
+
+### Enter Transitions
+
+- **`${name}-enter-from`**: Starting state for enter. Added before element is inserted, removed one frame after element is inserted.
+- **`${name}-enter-active`**: Active state for enter. Applied during the entire entering phase. Added before element is inserted, removed when transition/animation finishes.
+- **`${name}-enter-to`**: Ending state for enter. Added one frame after element is inserted (at the same time `enter-from` is removed), removed when transition/animation finishes.
+
+### Leave Transitions
+
+- **`${name}-leave-from`**: Starting state for leave. Added immediately when a leaving transition is triggered, removed after one frame.
+- **`${name}-leave-active`**: Active state for leave. Applied during the entire leaving phase. Added immediately when leave transition is triggered, removed when the transition/animation finishes.
+- **`${name}-leave-to`**: Ending state for leave. Added one frame after a leaving transition is triggered (at the same time `leave-from` is removed), removed when the transition/animation finishes.
+
+### Custom Classes
+
+You can override the default class names:
+
+- **enterFromClass** - `string`
+- **enterActiveClass** - `string`
+- **enterToClass** - `string`
+- **leaveFromClass** - `string`
+- **leaveActiveClass** - `string`
+- **leaveToClass** - `string`
+
+```vue
+<Transition
+  enter-active-class="animate__animated animate__fadeIn"
+  leave-active-class="animate__animated animate__fadeOut"
+>
+  <p v-if="show">Hello</p>
+</Transition>
+```
+
+### Appear Classes
+
+For initial render transitions when `appear` is true:
+
+- **appearFromClass** - `string` (defaults to `enterFromClass`)
+- **appearActiveClass** - `string` (defaults to `enterActiveClass`)
+- **appearToClass** - `string` (defaults to `enterToClass`)
+
+## JavaScript Hooks
+
+You can also hook into the transition process with JavaScript:
+
+### Enter Hooks
+
+#### onBeforeEnter
+
+- **Type:** `(el: Element) => void`
+
+Called before the element is inserted into the DOM.
+
+#### onEnter
+
+- **Type:** `(el: Element, done: () => void) => void`
+
+Called one frame after the element is inserted. If a `done` callback is provided as a second argument, it must be called to signal the end of the transition.
+
+#### onAfterEnter
+
+- **Type:** `(el: Element) => void`
+
+Called when the enter transition has finished.
+
+#### onEnterCancelled
+
+- **Type:** `(el: Element) => void`
+
+Called when the enter transition is cancelled before completion.
+
+### Leave Hooks
+
+#### onBeforeLeave
+
+- **Type:** `(el: Element) => void`
+
+Called when a leave transition is triggered.
+
+#### onLeave
+
+- **Type:** `(el: Element, done: () => void) => void`
+
+Called during the leaving transition. If a `done` callback is provided as a second argument, it must be called to signal the end of the transition.
+
+#### onAfterLeave
+
+- **Type:** `(el: Element) => void`
+
+Called when the leave transition has finished and the element has been removed from the DOM.
+
+#### onLeaveCancelled
+
+- **Type:** `(el: Element) => void`
+
+Only available in persisted mode (e.g., `v-show`). Called when the leave transition is cancelled.
+
+### Appear Hooks
+
+When `appear` is true, these hooks are called on initial render:
+
+- **onBeforeAppear** - defaults to `onBeforeEnter`
+- **onAppear** - defaults to `onEnter`
+- **onAfterAppear** - defaults to `onAfterEnter`
+- **onAppearCancelled** - defaults to `onEnterCancelled`
+
+### JavaScript-only Transitions
+
+```vue
+<Transition
+  :css="false"
+  @before-enter="onBeforeEnter"
+  @enter="onEnter"
+  @leave="onLeave"
+>
+  <p v-if="show">Hello</p>
+</Transition>
+```
+
+```js
+function onBeforeEnter(el) {
+  el.style.opacity = 0
+}
+
+function onEnter(el, done) {
+  // Use a library like GSAP
+  gsap.to(el, {
+    opacity: 1,
+    duration: 1,
+    onComplete: done
+  })
+}
+
+function onLeave(el, done) {
+  gsap.to(el, {
+    opacity: 0,
+    duration: 1,
+    onComplete: done
+  })
+}
+```
+
+<Note>
+When using JavaScript-only transitions, it's recommended to add the `:css="false"` prop. This explicitly tells Vue to skip CSS transition detection, preventing CSS rules from accidentally interfering.
+</Note>
+
+## Transition with Components
+
+`<Transition>` can also be used around dynamic components:
+
+```vue
+<Transition name="fade" mode="out-in">
+  <component :is="activeComponent" />
+</Transition>
+```
+
+## Source Reference
+
+- **Package:** `@vue/runtime-dom`
+- **Implementation:** `/packages/runtime-dom/src/components/Transition.ts:87`
+- **Props Interface:** `/packages/runtime-dom/src/components/Transition.ts:18-33`
+
+## See Also
+
+- [TransitionGroup](/built-ins/transition-group) - For animating lists
+- [Guide: Transition](/built-ins/transition) - Detailed transition guide

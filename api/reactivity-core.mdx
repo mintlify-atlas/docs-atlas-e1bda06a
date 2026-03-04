@@ -1,0 +1,419 @@
+---
+title: Reactivity API - Core
+description: Core reactivity APIs for creating reactive state in Vue.js
+---
+
+# Reactivity API: Core
+
+Core APIs for creating and managing reactive state in Vue.js.
+
+## ref()
+
+Takes an inner value and returns a reactive and mutable ref object, which has a single property `.value` that points to the inner value.
+
+<ParamField path="value" type="T">
+  The value to wrap in the ref. Can be any type.
+</ParamField>
+
+**Type:**
+```typescript
+function ref<T>(
+  value: T
+): [T] extends [Ref] ? IfAny<T, Ref<T>, T> : Ref<UnwrapRef<T>, UnwrapRef<T> | T>
+
+function ref<T = any>(): Ref<T | undefined>
+```
+
+**Returns:** `Ref<UnwrapRef<T>>` - A reactive ref object with a `.value` property
+
+**Example:**
+```javascript
+import { ref } from 'vue'
+
+const count = ref(0)
+console.log(count.value) // 0
+
+count.value = 1
+console.log(count.value) // 1
+```
+
+**Details:**
+- The ref object is mutable - you can assign new values to `.value`
+- It's also reactive - any read operations to `.value` are tracked, and write operations will trigger associated effects
+- If an object is assigned as a ref's value, the object is made deeply reactive with `reactive()`
+- To avoid deep conversion, use `shallowRef()` instead
+
+**See also:**
+- [Guide - Reactivity Fundamentals](/essentials/reactivity-fundamentals)
+- [Guide - Typing Refs](/api/composition-api-setup#typing-ref)
+
+---
+
+## reactive()
+
+Returns a reactive proxy of the object.
+
+<ParamField path="target" type="T extends object" required>
+  The source object to make reactive.
+</ParamField>
+
+**Type:**
+```typescript
+function reactive<T extends object>(target: T): Reactive<T>
+
+type Reactive<T> = UnwrapNestedRefs<T> & 
+  (T extends readonly any[] ? ReactiveMarker : {})
+```
+
+**Returns:** `Reactive<T>` - A reactive proxy of the original object
+
+**Example:**
+```javascript
+import { reactive } from 'vue'
+
+const obj = reactive({ count: 0 })
+obj.count++
+```
+
+**Details:**
+- The reactive conversion is "deep": it affects all nested properties
+- A reactive object also deeply unwraps any properties that are refs while maintaining reactivity
+- The returned proxy is not equal to the original object. It's recommended to work exclusively with the reactive proxy and avoid relying on the original object
+- To avoid deep conversion, use `shallowReactive()` instead
+
+**Caveats:**
+- Only works with object types (objects, arrays, and collection types like `Map` and `Set`)
+- Cannot replace the entire object - the reactivity connection to the first reference is lost
+- Not destructure-friendly - primitive properties lose reactivity when destructured
+
+**See also:**
+- [Guide - Reactivity Fundamentals](/essentials/reactivity-fundamentals)
+- [Guide - Typing Reactive](/api/composition-api-setup#typing-reactive)
+
+---
+
+## readonly()
+
+Takes an object (reactive or plain) or a ref and returns a readonly proxy to the original.
+
+<ParamField path="target" type="T extends object" required>
+  The source object (reactive or plain) or ref to make readonly.
+</ParamField>
+
+**Type:**
+```typescript
+function readonly<T extends object>(
+  target: T
+): DeepReadonly<UnwrapNestedRefs<T>>
+```
+
+**Returns:** `DeepReadonly<UnwrapNestedRefs<T>>` - A readonly proxy of the original
+
+**Example:**
+```javascript
+import { reactive, readonly } from 'vue'
+
+const original = reactive({ count: 0 })
+const copy = readonly(original)
+
+// mutating original will trigger watchers relying on the copy
+original.count++
+
+// mutating the copy will fail and result in a warning
+copy.count++ // warning!
+```
+
+**Details:**
+- A readonly proxy is deep: any nested property accessed will be readonly as well
+- It has the same ref-unwrapping behavior as `reactive()`, except the unwrapped values will also be made readonly
+- To avoid deep conversion, use `shallowReadonly()` instead
+
+**See also:**
+- [Guide - Computed Properties](/essentials/computed)
+
+---
+
+## computed()
+
+Takes a getter function and returns a readonly reactive ref object for the returned value from the getter. It can also take an object with get and set functions to create a writable ref object.
+
+<ParamField path="getter" type="ComputedGetter<T>">
+  A function that produces the computed value. The function receives the previous computed value as an optional argument.
+</ParamField>
+
+<ParamField path="options" type="WritableComputedOptions<T, S>">
+  An object with `get` and `set` functions to create a writable computed ref.
+  
+  <ParamField path="get" type="() => T" required>
+    Getter function that returns the computed value.
+  </ParamField>
+  
+  <ParamField path="set" type="(value: S) => void" required>
+    Setter function that is called when the computed ref is assigned a new value.
+  </ParamField>
+</ParamField>
+
+<ParamField path="debugOptions" type="DebuggerOptions">
+  Optional debugging options for development.
+  
+  <ParamField path="onTrack" type="(event: DebuggerEvent) => void">
+    Called when a reactive property or ref is tracked.
+  </ParamField>
+  
+  <ParamField path="onTrigger" type="(event: DebuggerEvent) => void">
+    Called when the watcher callback is triggered by a dependency mutation.
+  </ParamField>
+</ParamField>
+
+**Type:**
+```typescript
+function computed<T>(
+  getter: ComputedGetter<T>,
+  debugOptions?: DebuggerOptions
+): ComputedRef<T>
+
+function computed<T, S = T>(
+  options: WritableComputedOptions<T, S>,
+  debugOptions?: DebuggerOptions
+): WritableComputedRef<T, S>
+
+type ComputedGetter<T> = (oldValue?: T) => T
+type ComputedSetter<T> = (newValue: T) => void
+
+interface WritableComputedOptions<T, S = T> {
+  get: ComputedGetter<T>
+  set: ComputedSetter<S>
+}
+```
+
+**Returns:** `ComputedRef<T>` or `WritableComputedRef<T, S>` - A readonly or writable computed ref
+
+**Example:**
+```javascript
+import { ref, computed } from 'vue'
+
+// Creating a readonly computed ref
+const count = ref(1)
+const plusOne = computed(() => count.value + 1)
+
+console.log(plusOne.value) // 2
+plusOne.value++ // error - computed refs are readonly by default
+```
+
+```javascript
+// Creating a writable computed ref
+const count = ref(1)
+const plusOne = computed({
+  get: () => count.value + 1,
+  set: (val) => {
+    count.value = val - 1
+  }
+})
+
+plusOne.value = 10
+console.log(count.value) // 9
+```
+
+**Details:**
+- Computed properties are cached based on their reactive dependencies
+- A computed property will only re-evaluate when some of its reactive dependencies have changed
+- Creating a computed ref without a setter makes it readonly
+
+**See also:**
+- [Guide - Computed Properties](/essentials/computed)
+- [Guide - Computed Debugging](/guide/extras/reactivity-in-depth#computed-debugging)
+
+---
+
+## watch()
+
+Watches one or more reactive data sources and invokes a callback function when the sources change.
+
+<ParamField path="source" type="WatchSource | WatchSource[] | WatchEffect | object" required>
+  The watcher's source. Can be:
+  - A getter function that returns a value
+  - A ref
+  - A reactive object
+  - An array of the above types
+  - A function (for watchEffect-style usage)
+</ParamField>
+
+<ParamField path="callback" type="WatchCallback">
+  The callback to call when the source changes. Receives three arguments:
+  - `value`: the new value
+  - `oldValue`: the previous value
+  - `onCleanup`: a function for registering cleanup callbacks
+</ParamField>
+
+<ParamField path="options" type="WatchOptions">
+  Optional watch options.
+  
+  <ParamField path="immediate" type="boolean" default="false">
+    Trigger the callback immediately on watcher creation.
+  </ParamField>
+  
+  <ParamField path="deep" type="boolean | number" default="false">
+    Force deep traversal of the source if it is an object. Can be a number to specify max depth.
+  </ParamField>
+  
+  <ParamField path="once" type="boolean" default="false">
+    Run the callback only once.
+  </ParamField>
+  
+  <ParamField path="scheduler" type="WatchScheduler">
+    Custom scheduler for controlling when the callback is invoked.
+  </ParamField>
+  
+  <ParamField path="onTrack" type="(event: DebuggerEvent) => void">
+    Called when a reactive property or ref is tracked (dev mode only).
+  </ParamField>
+  
+  <ParamField path="onTrigger" type="(event: DebuggerEvent) => void">
+    Called when the watcher callback is triggered (dev mode only).
+  </ParamField>
+</ParamField>
+
+**Type:**
+```typescript
+function watch(
+  source: WatchSource | WatchSource[] | WatchEffect | object,
+  cb?: WatchCallback | null,
+  options?: WatchOptions
+): WatchHandle
+
+type WatchSource<T = any> = Ref<T, any> | ComputedRef<T> | (() => T)
+
+type WatchCallback<V = any, OV = any> = (
+  value: V,
+  oldValue: OV,
+  onCleanup: OnCleanup
+) => any
+
+interface WatchHandle extends WatchStopHandle {
+  pause: () => void
+  resume: () => void
+  stop: () => void
+}
+```
+
+**Returns:** `WatchHandle` - A handle with methods to control the watcher
+
+**Example:**
+```javascript
+import { ref, watch } from 'vue'
+
+const count = ref(0)
+
+// watching a single ref
+watch(count, (newValue, oldValue) => {
+  console.log(`count changed from ${oldValue} to ${newValue}`)
+})
+
+// watching a getter
+const state = reactive({ count: 0 })
+watch(
+  () => state.count,
+  (newValue, oldValue) => {
+    // ...
+  }
+)
+
+// watching multiple sources
+watch([fooRef, barRef], ([foo, bar], [prevFoo, prevBar]) => {
+  // ...
+})
+```
+
+**Details:**
+- `watch()` is lazy by default - the callback is only called when the watched source has changed
+- The first argument is the watcher's source, which can be a ref, reactive object, getter function, or array of sources
+- The second argument is the callback that will be called when the source changes
+- The third argument is an optional options object
+
+**See also:**
+- [Guide - Watchers](/essentials/watchers)
+- [Guide - watchEffect vs. watch](/essentials/watchers#watcheffect)
+
+---
+
+## watchEffect()
+
+Runs a function immediately while reactively tracking its dependencies and re-runs it whenever the dependencies change.
+
+<ParamField path="effect" type="WatchEffect" required>
+  The effect function to run. Receives an `onCleanup` callback for registering cleanup logic.
+</ParamField>
+
+<ParamField path="options" type="WatchOptions">
+  Optional watch options.
+  
+  <ParamField path="scheduler" type="WatchScheduler">
+    Custom scheduler for controlling when the effect is re-run.
+  </ParamField>
+  
+  <ParamField path="onTrack" type="(event: DebuggerEvent) => void">
+    Called when a reactive property or ref is tracked (dev mode only).
+  </ParamField>
+  
+  <ParamField path="onTrigger" type="(event: DebuggerEvent) => void">
+    Called when the effect is triggered (dev mode only).
+  </ParamField>
+</ParamField>
+
+**Type:**
+```typescript
+type WatchEffect = (onCleanup: OnCleanup) => void
+type OnCleanup = (cleanupFn: () => void) => void
+
+// watchEffect is implemented using watch() without a callback
+function watchEffect(
+  effect: WatchEffect,
+  options?: WatchOptions
+): WatchHandle
+```
+
+**Returns:** `WatchHandle` - A handle to stop the watcher
+
+**Example:**
+```javascript
+import { ref, watchEffect } from 'vue'
+
+const count = ref(0)
+
+watchEffect(() => {
+  console.log(count.value)
+})
+// -> logs 0 immediately
+
+count.value++
+// -> logs 1
+```
+
+**With cleanup:**
+```javascript
+watchEffect((onCleanup) => {
+  const token = performAsyncOperation(id.value)
+  
+  onCleanup(() => {
+    // id has changed or watcher is stopped
+    // invalidate previously pending async operation
+    token.cancel()
+  })
+})
+```
+
+**Details:**
+- `watchEffect()` runs immediately, unlike `watch()` which is lazy
+- Automatically tracks dependencies during its execution
+- Re-runs whenever any tracked dependency changes
+- The effect function receives an `onCleanup` callback for registering cleanup logic
+
+**Differences from watch():**
+- No need to separate source and callback
+- Runs immediately on creation
+- Doesn't provide old/new values to the callback
+- More convenient for effects that don't need the previous value
+
+**See also:**
+- [Guide - Watchers](/essentials/watchers)
+- [Guide - watchEffect](/essentials/watchers#watcheffect)

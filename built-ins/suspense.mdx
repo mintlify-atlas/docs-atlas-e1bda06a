@@ -1,0 +1,337 @@
+---
+title: <Suspense>
+description: Orchestrate nested async dependencies in a component tree
+---
+
+<Warning>
+`<Suspense>` is an experimental feature. Its API may change in future releases. Use with caution in production.
+</Warning>
+
+The `<Suspense>` component is used to orchestrate async dependencies in a component tree. It can render a loading state while waiting for multiple nested async dependencies down the component tree to be resolved.
+
+## Basic Usage
+
+```vue
+<Suspense>
+  <!-- component with nested async dependencies -->
+  <template #default>
+    <AsyncComponent />
+  </template>
+  
+  <!-- loading state via #fallback slot -->
+  <template #fallback>
+    <div>Loading...</div>
+  </template>
+</Suspense>
+```
+
+## Props
+
+### timeout
+
+- **Type:** `number | string`
+
+Specifies the timeout (in milliseconds) before displaying the fallback content. If set to `0`, the fallback will be displayed immediately when entering pending state.
+
+```vue
+<Suspense :timeout="500">
+  <AsyncComponent />
+  <template #fallback>
+    Loading...
+  </template>
+</Suspense>
+```
+
+### suspensible
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+When `true`, allows this suspense boundary to be captured by a parent suspense. By default, each `<Suspense>` is isolated.
+
+```vue
+<Suspense>
+  <Suspense suspensible>
+    <!-- This child suspense can trigger parent's pending state -->
+    <DeepAsyncComponent />
+  </Suspense>
+  
+  <template #fallback>
+    Loading parent...
+  </template>
+</Suspense>
+```
+
+## Events
+
+### onResolve
+
+- **Type:** `() => void`
+
+Emitted when the default slot has finished resolving new content.
+
+```vue
+<Suspense @resolve="onResolve">
+  <AsyncComponent />
+</Suspense>
+```
+
+### onPending
+
+- **Type:** `() => void`
+
+Emitted when entering a pending state (when switching to new content that has async dependencies).
+
+```vue
+<Suspense @pending="onPending">
+  <component :is="asyncView" />
+</Suspense>
+```
+
+### onFallback
+
+- **Type:** `() => void`
+
+Emitted when the fallback content is displayed.
+
+```vue
+<Suspense @fallback="onFallback">
+  <AsyncComponent />
+  <template #fallback>
+    Loading...
+  </template>
+</Suspense>
+```
+
+## Slots
+
+### default
+
+The primary content to display. If the content has async dependencies, it will enter a "pending" state until all dependencies are resolved.
+
+### fallback
+
+The content to display while the default slot is in a pending state.
+
+## Async Dependencies
+
+`<Suspense>` can detect async dependencies in the component tree. An async dependency can be:
+
+### 1. Async Setup
+
+A component with an async `setup()` function:
+
+```vue
+<script setup>
+const data = await fetch('/api/data').then(r => r.json())
+</script>
+```
+
+### 2. Async Component
+
+A component loaded asynchronously via `defineAsyncComponent()`:
+
+```js
+import { defineAsyncComponent } from 'vue'
+
+const AsyncComp = defineAsyncComponent(() => import('./AsyncComp.vue'))
+```
+
+## States and Transitions
+
+`<Suspense>` has three states:
+
+1. **Pending**: Waiting for async dependencies to resolve
+2. **Resolved**: Default content is displayed
+3. **Fallback**: Fallback content is displayed
+
+### Initial Mount
+
+```
+1. Render default content in memory (pending)
+2. If async deps > 0:
+   - Emit @pending
+   - Emit @fallback
+   - Render fallback content
+3. When all deps resolve:
+   - Emit @resolve
+   - Swap in default content
+```
+
+### Updating Content
+
+When the default content updates with new async dependencies:
+
+```
+1. Enter pending state (@pending)
+2. Continue showing current content OR
+   After timeout: show fallback (@fallback)
+3. When resolved: swap to new content (@resolve)
+```
+
+## Nested Async Components Example
+
+```vue
+<template>
+  <Suspense>
+    <Dashboard />
+    
+    <template #fallback>
+      <div class="loading">
+        <Spinner />
+        <p>Loading dashboard...</p>
+      </div>
+    </template>
+  </Suspense>
+</template>
+```
+
+```vue
+<!-- Dashboard.vue -->
+<script setup>
+import { ref } from 'vue'
+
+// This component has async dependencies
+const userData = await fetch('/api/user').then(r => r.json())
+const preferences = await fetch('/api/preferences').then(r => r.json())
+</script>
+
+<template>
+  <div class="dashboard">
+    <UserProfile :data="userData" />
+    <UserSettings :preferences="preferences" />
+  </div>
+</template>
+```
+
+## Combining with Router
+
+```vue
+<router-view v-slot="{ Component }">
+  <Suspense>
+    <component :is="Component" />
+    
+    <template #fallback>
+      <LoadingSpinner />
+    </template>
+  </Suspense>
+</router-view>
+```
+
+## Error Handling
+
+Async errors in suspense boundaries can be caught using `onErrorCaptured`:
+
+```vue
+<script setup>
+import { onErrorCaptured, ref } from 'vue'
+
+const error = ref(null)
+
+onErrorCaptured((err) => {
+  error.value = err
+  return true // prevent error from propagating
+})
+</script>
+
+<template>
+  <div v-if="error" class="error">
+    Error: {{ error.message }}
+  </div>
+  
+  <Suspense v-else>
+    <AsyncComponent />
+    <template #fallback>
+      Loading...
+    </template>
+  </Suspense>
+</template>
+```
+
+## Using with Transitions
+
+```vue
+<Suspense>
+  <component :is="asyncView" />
+  
+  <template #fallback>
+    <Transition name="fade" mode="out-in">
+      <LoadingSpinner />
+    </Transition>
+  </template>
+</Suspense>
+```
+
+## Using with KeepAlive
+
+When combining `<Suspense>` with `<KeepAlive>`, the `<KeepAlive>` should be nested inside `<Suspense>`:
+
+```vue
+<Suspense>
+  <KeepAlive>
+    <component :is="asyncView" />
+  </KeepAlive>
+  
+  <template #fallback>
+    Loading...
+  </template>
+</Suspense>
+```
+
+## Timeout Behavior
+
+- **`timeout > 0`**: Wait for the specified milliseconds before showing fallback
+- **`timeout = 0`**: Show fallback immediately
+- **`timeout` not set**: Only show fallback if component is not resolved synchronously
+
+```vue
+<!-- Show fallback immediately -->
+<Suspense :timeout="0">
+  <AsyncComponent />
+  <template #fallback>Loading...</template>
+</Suspense>
+
+<!-- Wait 200ms before showing fallback -->
+<Suspense :timeout="200">
+  <AsyncComponent />
+  <template #fallback>Loading...</template>
+</Suspense>
+```
+
+## Implementation Details
+
+- **Pending Branch**: Content is rendered in an off-DOM container until resolved (implementation at `/packages/runtime-core/src/components/Suspense.ts:169`)
+- **Dependency Tracking**: Uses a counter to track pending async dependencies (increments when found, decrements when resolved)
+- **Hydration**: Special handling for SSR - assumes server-rendered content is the resolved state
+
+## LRU Cache Strategy
+
+When combined with `<KeepAlive>`, suspense boundaries cache after the suspense resolves, not during the pending state (implementation at `/packages/runtime-core/src/components/KeepAlive.ts:249-252`).
+
+## Server-Side Rendering
+
+During SSR:
+- Only the resolved default content is rendered
+- Fallback content is not included in SSR output
+- On the client, hydration assumes the SSR content represents the resolved state
+
+## Limitations and Caveats
+
+<Warning>
+1. **Experimental API**: The API is subject to change in future versions
+2. **Single Root**: Both default and fallback slots should have a single root node
+3. **Async Detection**: Only detects async `setup()` and async components, not other async operations in lifecycle hooks
+</Warning>
+
+## Source Reference
+
+- **Package:** `@vue/runtime-core`
+- **Implementation:** `/packages/runtime-core/src/components/Suspense.ts:62-128`
+- **Props Interface:** `/packages/runtime-core/src/components/Suspense.ts:36-47`
+- **Boundary Interface:** `/packages/runtime-core/src/components/Suspense.ts:414-444`
+
+## See Also
+
+- [Async Components](/components/async)
+- [Guide: Suspense](/built-ins/suspense)
+- [KeepAlive](/built-ins/keep-alive)

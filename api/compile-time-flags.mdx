@@ -1,0 +1,508 @@
+---
+title: Compile-Time Flags
+description: Reference for Vue's compile-time feature flags for build optimization and tree-shaking
+---
+
+# Compile-Time Flags
+
+Vue uses compile-time flags to enable conditional compilation and better tree-shaking in production builds.
+
+## Overview
+
+Compile-time flags are global constants replaced at build time by bundlers. They allow:
+
+- Dead code elimination in production
+- Feature toggles for bundle size optimization
+- Development-only code that gets stripped in production
+- Platform-specific code paths
+
+## Core Flags
+
+### `__DEV__`
+
+Indicates development mode.
+
+**Type:** `boolean`
+
+**Usage:**
+
+```ts
+if (__DEV__) {
+  console.warn('Development warning')
+}
+```
+
+**Build Configuration:**
+
+```js
+// Vite
+export default {
+  define: {
+    __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production')
+  }
+}
+
+// webpack
+new webpack.DefinePlugin({
+  __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production')
+})
+```
+
+In production builds, development-only code is completely removed:
+
+```js
+// Development build
+if (true) {
+  console.warn('Development warning')
+}
+
+// Production build (removed by tree-shaking)
+if (false) {
+  console.warn('Development warning')
+}
+// Entire block is eliminated
+```
+
+### `__BROWSER__`
+
+Indicates code is running in a browser environment.
+
+**Type:** `boolean`
+
+**Usage:**
+
+```ts
+if (__BROWSER__) {
+  // Browser-specific code
+  document.addEventListener('click', handler)
+} else {
+  // SSR or Node.js code
+  process.on('SIGTERM', cleanup)
+}
+```
+
+**Default Values:**
+- Browser builds: `true`
+- SSR builds: `false`
+- Universal builds: Set via bundler
+
+### `__GLOBAL__`
+
+Indicates building for IIFE (global variable) format.
+
+**Type:** `boolean`
+
+**Usage:**
+
+```ts
+if (__GLOBAL__ || __ESM_BROWSER__) {
+  throw new Error('Not supported in browser builds')
+}
+```
+
+**Default Values:**
+- Global/UMD builds: `true`
+- ESM/CJS builds: `false`
+
+### `__ESM_BROWSER__`
+
+Indicates building for browser ESM format.
+
+**Type:** `boolean`
+
+**Usage:**
+
+```ts
+if (__ESM_BROWSER__) {
+  // Use browser-compatible imports
+  await import('./browser-module.js')
+} else {
+  // Use Node.js imports
+  require('./node-module.js')
+}
+```
+
+**Default Values:**
+- ESM-browser builds: `true`
+- Other builds: `false`
+
+### `__ESM_BUNDLER__`
+
+Indicates building for bundler ESM format.
+
+**Type:** `boolean`
+
+**Usage:**
+
+```ts
+if (__ESM_BUNDLER__) {
+  // Code optimized for bundlers
+  // Tree-shakeable imports
+}
+```
+
+**Default Values:**
+- ESM-bundler builds: `true`
+- Other builds: `false`
+
+### `__CJS__`
+
+Indicates building for CommonJS format.
+
+**Type:** `boolean`
+
+**Usage:**
+
+```ts
+if (__CJS__) {
+  // CommonJS-specific exports
+  module.exports = Vue
+}
+```
+
+**Default Values:**
+- CommonJS builds: `true`
+- Other builds: `false`
+
+## Feature Flags
+
+### `__FEATURE_OPTIONS_API__`
+
+Enables/disables the Options API.
+
+**Type:** `boolean`
+
+**Default:** `true`
+
+**Usage:**
+
+Disable to reduce bundle size if only using Composition API:
+
+```js
+// Vite
+export default {
+  define: {
+    __VUE_OPTIONS_API__: JSON.stringify(false)
+  }
+}
+```
+
+Results in:
+- ~20-30KB reduction in bundle size
+- Options API becomes unavailable
+- Only Composition API works
+
+**Runtime Detection:**
+
+```ts
+if (__FEATURE_OPTIONS_API__) {
+  // Options API code
+  processOptions(options)
+}
+```
+
+### `__FEATURE_PROD_DEVTOOLS__`
+
+Enables Vue DevTools in production.
+
+**Type:** `boolean`
+
+**Default:** `false`
+
+**Usage:**
+
+```js
+// Enable devtools in production
+export default {
+  define: {
+    __VUE_PROD_DEVTOOLS__: JSON.stringify(true)
+  }
+}
+```
+
+**Note:** Enabling this increases bundle size and may expose application internals.
+
+### `__FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__`
+
+Enables detailed hydration mismatch warnings in production SSR.
+
+**Type:** `boolean`
+
+**Default:** `false`
+
+**Usage:**
+
+```js
+export default {
+  define: {
+    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: JSON.stringify(true)
+  }
+}
+```
+
+Provides detailed error messages for SSR hydration mismatches in production:
+
+```ts
+if (__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) {
+  warn(
+    `Hydration mismatch: expected "${expected}" but got "${actual}"`
+  )
+}
+```
+
+## Compiler-Specific Flags
+
+### Compiler-SFC Flags
+
+Internal flags used in `@vue/compiler-sfc`:
+
+```ts
+// Disable features in browser builds
+if (__GLOBAL__ || __ESM_BROWSER__) {
+  throw new Error(
+    'CSS Modules not supported in browser builds'
+  )
+}
+
+// Node.js-only features
+if (!__BROWSER__) {
+  const fs = require('fs')
+  // File system operations
+}
+```
+
+### Source Map Flags
+
+```ts
+if (!__BROWSER__ && context.map) {
+  // Generate source maps
+  generateSourceMap(context)
+}
+```
+
+## Configuration
+
+### Vite
+
+```js
+// vite.config.js
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  define: {
+    // Core flags (usually automatic)
+    __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production'),
+    
+    // Feature flags
+    __VUE_OPTIONS_API__: JSON.stringify(true),
+    __VUE_PROD_DEVTOOLS__: JSON.stringify(false),
+    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: JSON.stringify(false)
+  }
+})
+```
+
+### webpack
+
+```js
+// webpack.config.js
+const webpack = require('webpack')
+
+module.exports = {
+  plugins: [
+    new webpack.DefinePlugin({
+      __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production'),
+      __VUE_OPTIONS_API__: JSON.stringify(true),
+      __VUE_PROD_DEVTOOLS__: JSON.stringify(false),
+      __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: JSON.stringify(false)
+    })
+  ]
+}
+```
+
+### Rollup
+
+```js
+// rollup.config.js
+import replace from '@rollup/plugin-replace'
+
+export default {
+  plugins: [
+    replace({
+      __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production'),
+      __VUE_OPTIONS_API__: JSON.stringify(true),
+      __VUE_PROD_DEVTOOLS__: JSON.stringify(false),
+      __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: JSON.stringify(false),
+      preventAssignment: true
+    })
+  ]
+}
+```
+
+## Runtime Feature Detection
+
+Vue automatically initializes feature flags at runtime if not provided:
+
+```ts
+// @vue/runtime-core/src/featureFlags.ts
+export function initFeatureFlags(): void {
+  if (typeof __FEATURE_OPTIONS_API__ !== 'boolean') {
+    __DEV__ && console.warn('__VUE_OPTIONS_API__ not defined')
+    getGlobalThis().__VUE_OPTIONS_API__ = true
+  }
+
+  if (typeof __FEATURE_PROD_DEVTOOLS__ !== 'boolean') {
+    __DEV__ && console.warn('__VUE_PROD_DEVTOOLS__ not defined')
+    getGlobalThis().__VUE_PROD_DEVTOOLS__ = false
+  }
+
+  if (typeof __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__ !== 'boolean') {
+    __DEV__ && console.warn('__VUE_PROD_HYDRATION_MISMATCH_DETAILS__ not defined')
+    getGlobalThis().__VUE_PROD_HYDRATION_MISMATCH_DETAILS__ = false
+  }
+}
+```
+
+## TypeScript Declarations
+
+Declare flags in your project for type safety:
+
+```ts
+// env.d.ts
+declare const __DEV__: boolean
+declare const __BROWSER__: boolean
+declare const __GLOBAL__: boolean
+declare const __ESM_BROWSER__: boolean
+declare const __ESM_BUNDLER__: boolean
+declare const __CJS__: boolean
+
+// Feature flags
+declare const __FEATURE_OPTIONS_API__: boolean
+declare const __FEATURE_PROD_DEVTOOLS__: boolean
+declare const __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__: boolean
+
+// Alias for runtime globals
+declare const __VUE_OPTIONS_API__: boolean
+declare const __VUE_PROD_DEVTOOLS__: boolean
+declare const __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: boolean
+```
+
+## Best Practices
+
+### 1. Always Define Feature Flags
+
+Explicitly define all feature flags in your build config to avoid runtime warnings:
+
+```js
+define: {
+  __VUE_OPTIONS_API__: JSON.stringify(true),
+  __VUE_PROD_DEVTOOLS__: JSON.stringify(false),
+  __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: JSON.stringify(false)
+}
+```
+
+### 2. Use JSON.stringify()
+
+Always wrap values in `JSON.stringify()` to ensure proper string replacement:
+
+```js
+// ✅ Correct
+__DEV__: JSON.stringify(true)
+
+// ❌ Wrong (produces identifier instead of boolean)
+__DEV__: true
+```
+
+### 3. Tree-Shaking Optimization
+
+Structure code to maximize tree-shaking:
+
+```ts
+// ✅ Good - can be tree-shaken
+if (__DEV__) {
+  devOnlyFunction()
+}
+
+// ❌ Bad - harder to tree-shake
+const shouldLog = __DEV__
+if (shouldLog) {
+  devOnlyFunction()
+}
+```
+
+### 4. Guard Development Imports
+
+Keep development-only imports inside `__DEV__` checks:
+
+```ts
+if (__DEV__) {
+  const { devtoolsPlugin } = await import('./devtools')
+  app.use(devtoolsPlugin)
+}
+```
+
+### 5. Platform-Specific Code
+
+Use flags for platform-specific implementations:
+
+```ts
+const storage = __BROWSER__
+  ? window.localStorage
+  : new ServerStorage()
+```
+
+## Bundle Size Impact
+
+Disabling features reduces bundle size:
+
+| Flag | Size Savings | Impact |
+|------|--------------|--------|
+| `__VUE_OPTIONS_API__: false` | ~20-30 KB | Removes Options API |
+| `__VUE_PROD_DEVTOOLS__: false` | ~5-10 KB | Removes devtools integration |
+| `__DEV__: false` | Varies | Removes all dev warnings |
+
+## Common Patterns
+
+### Development Warnings
+
+```ts
+if (__DEV__ && !props.value) {
+  warn('Value prop is required')
+}
+```
+
+### Feature Detection
+
+```ts
+if (__FEATURE_OPTIONS_API__) {
+  applyOptions(instance, options)
+}
+```
+
+### Platform Branching
+
+```ts
+const compile = __BROWSER__
+  ? compileForBrowser
+  : compileForServer
+```
+
+### Build Format Detection
+
+```ts
+if (__ESM_BUNDLER__) {
+  // Preserve feature flag checks for user's bundler
+  if (__FEATURE_OPTIONS_API__) {
+    // ...
+  }
+} else {
+  // Pre-evaluated for direct browser use
+  // ...
+}
+```
+
+## See Also
+
+- [SFC Syntax Specification](/api/sfc-spec)
+- [SFC Script Setup](/api/sfc-script-setup)
+- [SFC CSS Features](/api/sfc-css-features)
+- [Vue Feature Flags Guide](https://link.vuejs.org/feature-flags)

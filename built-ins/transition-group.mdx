@@ -1,0 +1,251 @@
+---
+title: <TransitionGroup>
+description: Apply transitions to multiple elements or components in a list
+---
+
+The `<TransitionGroup>` component provides transition effects for multiple elements or components in a list. Unlike `<Transition>`, it renders an actual element and requires children to be keyed.
+
+## Basic Usage
+
+```vue
+<TransitionGroup name="list" tag="ul">
+  <li v-for="item in items" :key="item.id">
+    {{ item.text }}
+  </li>
+</TransitionGroup>
+```
+
+```css
+.list-enter-active,
+.list-leave-active {
+  transition: all 0.5s ease;
+}
+
+.list-enter-from,
+.list-leave-to {
+  opacity: 0;
+  transform: translateX(30px);
+}
+
+/* ensure leaving items are removed from layout flow */
+.list-leave-active {
+  position: absolute;
+}
+```
+
+## Props
+
+`<TransitionGroup>` accepts all the same props as `<Transition>` except `mode`, plus two additional props:
+
+### tag
+
+- **Type:** `string`
+- **Default:** `Fragment` (renders no wrapper element)
+
+Specifies the HTML tag to render as the wrapper element. If not specified, `<TransitionGroup>` renders a fragment (no wrapper element).
+
+```vue
+<!-- Renders a <ul> element -->
+<TransitionGroup tag="ul" name="list">
+  <li v-for="item in items" :key="item.id">{{ item }}</li>
+</TransitionGroup>
+```
+
+### moveClass
+
+- **Type:** `string`
+
+Overrides the CSS class applied during moving transitions. Defaults to `${name}-move` where `name` is the transition name.
+
+```vue
+<TransitionGroup name="list" move-class="custom-move">
+  <!-- children -->
+</TransitionGroup>
+```
+
+## Inherited Props from Transition
+
+### name
+
+- **Type:** `string`
+- **Default:** `'v'`
+
+Used to generate transition CSS class names.
+
+### css
+
+- **Type:** `boolean`
+- **Default:** `true`
+
+Whether to apply CSS transition classes.
+
+### type
+
+- **Type:** `'transition' | 'animation'`
+
+Specifies the type of transition events to listen for.
+
+### duration
+
+- **Type:** `number | { enter: number; leave: number }`
+
+Specifies explicit transition durations in milliseconds.
+
+### appear
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Whether to apply transition on initial render.
+
+### Custom Transition Classes
+
+All custom class props from `<Transition>`:
+
+- **enterFromClass** - `string`
+- **enterActiveClass** - `string`
+- **enterToClass** - `string`
+- **leaveFromClass** - `string`
+- **leaveActiveClass** - `string`
+- **leaveToClass** - `string`
+- **appearFromClass** - `string`
+- **appearActiveClass** - `string`
+- **appearToClass** - `string`
+
+## JavaScript Hooks
+
+All hooks from `<Transition>` are supported:
+
+- **onBeforeEnter** - `(el: Element) => void`
+- **onEnter** - `(el: Element, done: () => void) => void`
+- **onAfterEnter** - `(el: Element) => void`
+- **onEnterCancelled** - `(el: Element) => void`
+- **onBeforeLeave** - `(el: Element) => void`
+- **onLeave** - `(el: Element, done: () => void) => void`
+- **onAfterLeave** - `(el: Element) => void`
+- **onLeaveCancelled** - `(el: Element) => void`
+- **onBeforeAppear** - `(el: Element) => void`
+- **onAppear** - `(el: Element, done: () => void) => void`
+- **onAfterAppear** - `(el: Element) => void`
+- **onAppearCancelled** - `(el: Element) => void`
+
+## Move Transitions
+
+The `<TransitionGroup>` component supports move transitions via the FLIP technique. When items change position, a move class is applied to smoothly transition them to their new positions.
+
+### Move Class
+
+The move class (defaults to `${name}-move`) is applied to elements that are changing position:
+
+```css
+.list-move {
+  transition: transform 0.5s ease;
+}
+```
+
+<Note>
+The move transition uses the CSS `transform` property. Make sure leaving elements are removed from the layout flow (e.g., with `position: absolute`) so that the move animation can be calculated correctly.
+</Note>
+
+## Key Requirement
+
+<Warning>
+All children of `<TransitionGroup>` must be uniquely keyed. Without keys, Vue cannot track which elements are entering, leaving, or moving.
+</Warning>
+
+```vue
+<!-- Correct: Each item has a unique key -->
+<TransitionGroup name="list">
+  <div v-for="item in items" :key="item.id">
+    {{ item.text }}
+  </div>
+</TransitionGroup>
+
+<!-- Wrong: Missing keys -->
+<TransitionGroup name="list">
+  <div v-for="item in items">
+    {{ item.text }}
+  </div>
+</TransitionGroup>
+```
+
+## Complete Example
+
+```vue
+<template>
+  <button @click="shuffle">Shuffle</button>
+  <button @click="add">Add</button>
+  <button @click="remove">Remove</button>
+
+  <TransitionGroup name="list" tag="ul">
+    <li v-for="item in items" :key="item.id" class="list-item">
+      {{ item.text }}
+    </li>
+  </TransitionGroup>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { shuffle as _shuffle } from 'lodash-es'
+
+const items = ref([1, 2, 3, 4, 5].map(n => ({ id: n, text: `Item ${n}` })))
+let nextId = 6
+
+function shuffle() {
+  items.value = _shuffle(items.value)
+}
+
+function add() {
+  items.value.splice(
+    Math.round(Math.random() * items.value.length),
+    0,
+    { id: nextId++, text: `Item ${nextId - 1}` }
+  )
+}
+
+function remove() {
+  items.value.splice(Math.round(Math.random() * items.value.length), 1)
+}
+</script>
+
+<style>
+.list-enter-active,
+.list-leave-active {
+  transition: all 0.5s ease;
+}
+
+.list-enter-from,
+.list-leave-to {
+  opacity: 0;
+  transform: translateX(30px);
+}
+
+/* ensure leaving items are taken out of layout flow so that moving
+   animations can be calculated correctly. */
+.list-leave-active {
+  position: absolute;
+}
+
+.list-move {
+  transition: transform 0.5s ease;
+}
+</style>
+```
+
+## Differences from `<Transition>`
+
+1. **Renders an element**: `<TransitionGroup>` renders a real DOM element (or fragment), while `<Transition>` does not.
+2. **No `mode` prop**: The `mode` prop is not supported.
+3. **Children must be keyed**: All children must have unique `key` attributes.
+4. **Move transitions**: Supports smooth position transitions via the move class.
+
+## Source Reference
+
+- **Package:** `@vue/runtime-dom`
+- **Implementation:** `/packages/runtime-dom/src/components/TransitionGroup.ts:61-175`
+- **Props Interface:** `/packages/runtime-dom/src/components/TransitionGroup.ts:42-45`
+
+## See Also
+
+- [Transition](/built-ins/transition) - For single element transitions
+- [Guide: TransitionGroup](/built-ins/transition-group) - Detailed guide

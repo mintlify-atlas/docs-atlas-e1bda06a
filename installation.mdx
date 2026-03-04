@@ -1,0 +1,290 @@
+---
+title: Installation
+description: Install Vue.js in your project using npm, pnpm, yarn, or CDN for rapid prototyping
+---
+
+# Installation
+
+Vue.js can be installed in multiple ways depending on your use case. This guide covers all installation methods for Vue 3.5.29.
+
+<Note>
+Vue 3 requires Node.js version 20.0.0 or higher according to the `package.json` engines field.
+</Note>
+
+## Package Manager Installation
+
+For building scalable applications, we recommend installing Vue with a package manager.
+
+<CodeGroup>
+
+```bash npm
+npm install vue@latest
+```
+
+```bash pnpm
+pnpm add vue
+```
+
+```bash yarn
+yarn add vue
+```
+
+</CodeGroup>
+
+### Package Information
+
+According to `packages/vue/package.json`, the official Vue package provides:
+
+- **Package name**: `vue`
+- **Current version**: `3.5.29`
+- **Description**: "The progressive JavaScript framework for building modern web UI."
+- **Main entry**: `index.js` (CommonJS)
+- **Module entry**: `dist/vue.runtime.esm-bundler.js` (ES modules)
+- **Types**: `dist/vue.d.ts` (TypeScript definitions)
+
+<Tip>
+The default import uses the runtime-only build (`vue.runtime.esm-bundler.js`), which requires templates to be pre-compiled. This is the recommended approach for production applications.
+</Tip>
+
+## CDN Installation
+
+For prototyping or learning, you can use Vue directly from a CDN without any build step.
+
+### Using unpkg
+
+```html
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+```
+
+This exposes Vue as a global `Vue` object:
+
+```html
+<div id="app">{{ message }}</div>
+
+<script>
+  const { createApp, ref } = Vue
+  
+  createApp({
+    setup() {
+      const message = ref('Hello Vue!')
+      return { message }
+    }
+  }).mount('#app')
+</script>
+```
+
+### Using jsDelivr
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
+```
+
+<Warning>
+The CDN builds are meant for prototyping only. For production, always use a build tool and the runtime-only build to reduce bundle size.
+</Warning>
+
+### ES Module Build
+
+For modern browsers with native ES module support:
+
+```html
+<script type="module">
+  import { createApp, ref } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js'
+  
+  createApp({
+    setup() {
+      const count = ref(0)
+      return { count }
+    }
+  }).mount('#app')
+</script>
+```
+
+## Distribution Files
+
+From `packages/vue/README.md`, Vue provides different builds for different use cases:
+
+### Browser Builds
+
+<AccordionGroup>
+  <Accordion title="vue.global.js - Full build with compiler">
+    - For direct use via `<script src="...">`
+    - Exposes the `Vue` global object
+    - Includes compiler for runtime template compilation
+    - Use `vue.global.prod.js` for production (minified)
+  </Accordion>
+  
+  <Accordion title="vue.runtime.global.js - Runtime only">
+    - For direct browser use
+    - Requires templates to be pre-compiled
+    - Smaller file size (no compiler)
+    - Use `vue.runtime.global.prod.js` for production
+  </Accordion>
+  
+  <Accordion title="vue.esm-browser.js - Native ES modules">
+    - For native ES module imports in browsers
+    - Use with `<script type="module">`
+    - Same compilation options as global build
+    - Use `vue.esm-browser.prod.js` for production
+  </Accordion>
+</AccordionGroup>
+
+### Bundler Builds
+
+<AccordionGroup>
+  <Accordion title="vue.runtime.esm-bundler.js - Default for bundlers">
+    - For webpack, Vite, Rollup, Parcel
+    - Runtime only (templates pre-compiled)
+    - Tree-shakeable with proper bundler config
+    - Default entry via `package.json` module field
+  </Accordion>
+  
+  <Accordion title="vue.esm-bundler.js - With compiler">
+    - Includes runtime template compiler
+    - Use for runtime template compilation
+    - Requires bundler alias configuration
+    - Larger bundle size (+14KB)
+  </Accordion>
+</AccordionGroup>
+
+### Server-Side Rendering
+
+<Accordion title="vue.cjs.js - Node.js CommonJS">
+  - For Node.js server-side rendering
+  - Uses `require()` syntax
+  - Auto-selects dev/prod based on `process.env.NODE_ENV`
+  - Used when bundling with `target: 'node'`
+</Accordion>
+
+## TypeScript Support
+
+Vue 3 is written in TypeScript and provides first-class TypeScript support.
+
+```bash
+npm install vue typescript
+```
+
+According to `packages/vue/package.json:104-110`, TypeScript is an optional peer dependency:
+
+```json
+{
+  "peerDependencies": {
+    "typescript": "*"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  }
+}
+```
+
+<Tip>
+Vue's type definitions are included in the package. No need to install `@types/vue`.
+</Tip>
+
+## Browser DevTools
+
+For a better development experience, install the Vue DevTools browser extension:
+
+<CardGroup cols={2}>
+  <Card title="Chrome Extension" icon="chrome" href="https://chrome.google.com/webstore/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd">
+    Install for Chrome, Edge, Brave
+  </Card>
+  
+  <Card title="Firefox Addon" icon="firefox" href="https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/">
+    Install for Firefox
+  </Card>
+</CardGroup>
+
+### DevTools Features
+
+- Inspect component hierarchy
+- View and edit component state
+- Track events and performance
+- Time-travel debugging
+- Route inspection (with Vue Router)
+
+<Note>
+According to `packages/runtime-core/src/devtools.ts:24`, DevTools integration is built into Vue's runtime core with functions like `devtoolsInitApp` and `devtoolsUnmountApp`.
+</Note>
+
+## Build Tool Setup
+
+For production applications, use a build tool:
+
+### Vite (Recommended)
+
+```bash
+npm create vue@latest
+```
+
+This uses the official `create-vue` scaffolding tool powered by Vite.
+
+### Vue CLI (Legacy)
+
+```bash
+npm install -g @vue/cli
+vue create my-project
+```
+
+<Warning>
+Vue CLI is now in maintenance mode. For new projects, use Vite or another modern build tool.
+</Warning>
+
+## Package Dependencies
+
+From `packages/vue/package.json:97-102`, Vue core depends on these workspace packages:
+
+```json
+{
+  "dependencies": {
+    "@vue/shared": "workspace:*",
+    "@vue/compiler-dom": "workspace:*",
+    "@vue/runtime-dom": "workspace:*",
+    "@vue/compiler-sfc": "workspace:*",
+    "@vue/server-renderer": "workspace:*"
+  }
+}
+```
+
+When you install `vue`, you get:
+
+- **@vue/shared** - Shared utility functions
+- **@vue/compiler-dom** - Template compiler for DOM
+- **@vue/runtime-dom** - Runtime for DOM rendering
+- **@vue/compiler-sfc** - Single-File Component compiler
+- **@vue/server-renderer** - Server-side rendering support
+
+## Verification
+
+Verify your installation:
+
+```javascript
+import { version } from 'vue'
+console.log(version) // Should print: 3.5.29
+```
+
+<Steps>
+  <Step title="Install Vue">
+    Choose your preferred installation method
+  </Step>
+  
+  <Step title="Verify installation">
+    Check the version to confirm successful installation
+  </Step>
+  
+  <Step title="Install DevTools">
+    Add browser extension for better development experience
+  </Step>
+  
+  <Step title="Start building">
+    Follow the [Quick Start](/quickstart) guide to create your first app
+  </Step>
+</Steps>
+
+## Next Steps
+
+<Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+  Learn how to create your first Vue application with step-by-step instructions
+</Card>

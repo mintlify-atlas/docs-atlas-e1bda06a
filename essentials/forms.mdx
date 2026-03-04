@@ -1,0 +1,646 @@
+---
+title: Form Input Bindings
+description: Learn how to create two-way data bindings on form inputs using v-model directive.
+---
+
+The `v-model` directive creates two-way data bindings on form input, textarea, and select elements.
+
+## Basic Usage
+
+The `v-model` directive automatically picks the correct way to update the element based on the input type:
+
+```vue
+<template>
+  <div>
+    <input v-model="message" placeholder="Edit me" />
+    <p>Message: {{ message }}</p>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const message = ref('')
+</script>
+```
+
+<Note>
+  `v-model` will ignore the initial `value`, `checked`, or `selected` attributes on form elements. It always treats the current bound JavaScript state as the source of truth.
+</Note>
+
+## Text Input
+
+From `packages/runtime-dom/src/directives/vModel.ts:56-117`, the `vModelText` directive handles text and textarea inputs:
+
+```vue
+<template>
+  <div>
+    <input v-model="text" type="text" />
+    <textarea v-model="multiline" />
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const text = ref('')
+const multiline = ref('')
+</script>
+```
+
+### How vModelText Works
+
+From the source code:
+
+```typescript
+export const vModelText: ModelDirective<
+  HTMLInputElement | HTMLTextAreaElement,
+  'trim' | 'number' | 'lazy'
+> = {
+  created(el, { modifiers: { lazy, trim, number } }, vnode) {
+    el[assignKey] = getModelAssigner(vnode)
+    const castToNumber = number || (vnode.props && vnode.props.type === 'number')
+    
+    addEventListener(el, lazy ? 'change' : 'input', e => {
+      if ((e.target as any).composing) return
+      el[assignKey](castValue(el.value, trim, castToNumber))
+    })
+    
+    if (!lazy) {
+      addEventListener(el, 'compositionstart', onCompositionStart)
+      addEventListener(el, 'compositionend', onCompositionEnd)
+      addEventListener(el, 'change', onCompositionEnd)
+    }
+  },
+  
+  mounted(el, { value }) {
+    el.value = value == null ? '' : value
+  },
+  
+  beforeUpdate(el, { value, modifiers: { lazy, trim, number } }) {
+    if ((el as any).composing) return
+    
+    const elValue = (number || el.type === 'number') && !/^0\d/.test(el.value)
+      ? looseToNumber(el.value)
+      : el.value
+    const newValue = value == null ? '' : value
+    
+    if (elValue === newValue) return
+    
+    el.value = newValue
+  }
+}
+```
+
+## Checkbox
+
+From `packages/runtime-dom/src/directives/vModel.ts:119-172`, checkboxes can bind to boolean, array, or Set:
+
+<CodeGroup>
+```vue Single Checkbox
+<template>
+  <div>
+    <input type="checkbox" v-model="checked" id="checkbox" />
+    <label for="checkbox">{{ checked }}</label>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const checked = ref(false)
+</script>
+```
+
+```vue Multiple Checkboxes
+<template>
+  <div>
+    <input type="checkbox" v-model="checkedNames" value="Jack" id="jack" />
+    <label for="jack">Jack</label>
+    
+    <input type="checkbox" v-model="checkedNames" value="John" id="john" />
+    <label for="john">John</label>
+    
+    <input type="checkbox" v-model="checkedNames" value="Mike" id="mike" />
+    <label for="mike">Mike</label>
+    
+    <p>Checked names: {{ checkedNames }}</p>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const checkedNames = ref([])
+</script>
+```
+</CodeGroup>
+
+### Checkbox with Array/Set
+
+From `packages/runtime-dom/src/directives/vModel.ts:129-149`:
+
+```typescript
+export const vModelCheckbox: ModelDirective<HTMLInputElement> = {
+  created(el, _, vnode) {
+    el[assignKey] = getModelAssigner(vnode)
+    addEventListener(el, 'change', () => {
+      const modelValue = (el as any)._modelValue
+      const elementValue = getValue(el)
+      const checked = el.checked
+      const assign = el[assignKey]
+      
+      if (isArray(modelValue)) {
+        const index = looseIndexOf(modelValue, elementValue)
+        const found = index !== -1
+        if (checked && !found) {
+          assign(modelValue.concat(elementValue))
+        } else if (!checked && found) {
+          const filtered = [...modelValue]
+          filtered.splice(index, 1)
+          assign(filtered)
+        }
+      } else if (isSet(modelValue)) {
+        const cloned = new Set(modelValue)
+        if (checked) {
+          cloned.add(elementValue)
+        } else {
+          cloned.delete(elementValue)
+        }
+        assign(cloned)
+      } else {
+        assign(getCheckboxValue(el, checked))
+      }
+    })
+  }
+}
+```
+
+## Radio Buttons
+
+```vue
+<template>
+  <div>
+    <input type="radio" v-model="picked" value="One" id="one" />
+    <label for="one">One</label>
+    
+    <input type="radio" v-model="picked" value="Two" id="two" />
+    <label for="two">Two</label>
+    
+    <p>Picked: {{ picked }}</p>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const picked = ref('')
+</script>
+```
+
+## Select
+
+<CodeGroup>
+```vue Single Select
+<template>
+  <div>
+    <select v-model="selected">
+      <option disabled value="">Please select one</option>
+      <option>A</option>
+      <option>B</option>
+      <option>C</option>
+    </select>
+    <p>Selected: {{ selected }}</p>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const selected = ref('')
+</script>
+```
+
+```vue Multiple Select
+<template>
+  <div>
+    <select v-model="selected" multiple>
+      <option>A</option>
+      <option>B</option>
+      <option>C</option>
+    </select>
+    <p>Selected: {{ selected }}</p>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const selected = ref([])
+</script>
+```
+
+```vue Dynamic Options
+<template>
+  <select v-model="selected">
+    <option v-for="option in options" :key="option.value" :value="option.value">
+      {{ option.text }}
+    </option>
+  </select>
+  <p>Selected: {{ selected }}</p>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const selected = ref('a')
+const options = ref([
+  { text: 'One', value: 'a' },
+  { text: 'Two', value: 'b' },
+  { text: 'Three', value: 'c' }
+])
+</script>
+```
+</CodeGroup>
+
+## Value Bindings
+
+Bind to non-string values:
+
+<CodeGroup>
+```vue Checkbox
+<template>
+  <input
+    type="checkbox"
+    v-model="toggle"
+    true-value="yes"
+    false-value="no"
+  />
+  <p>{{ toggle }}</p>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const toggle = ref('no')
+</script>
+```
+
+```vue Radio
+<template>
+  <input type="radio" v-model="pick" :value="first" />
+  <input type="radio" v-model="pick" :value="second" />
+  <p>{{ pick }}</p>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const pick = ref(null)
+const first = ref({ name: 'First' })
+const second = ref({ name: 'Second' })
+</script>
+```
+
+```vue Select
+<template>
+  <select v-model="selected">
+    <option :value="{ number: 123 }">123</option>
+  </select>
+  <p>{{ selected }}</p>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const selected = ref(null)
+</script>
+```
+</CodeGroup>
+
+## Modifiers
+
+From `packages/runtime-dom/src/directives/vModel.ts:48-52`, Vue provides built-in modifiers for `v-model`:
+
+### .lazy
+
+Sync after `change` event instead of `input`:
+
+```vue
+<template>
+  <!-- Synced on change, not on every keystroke -->
+  <input v-model.lazy="msg" />
+</template>
+```
+
+### .number
+
+Automatically typecast to number:
+
+```vue
+<template>
+  <input v-model.number="age" type="number" />
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const age = ref(0)
+// age.value is always a number
+</script>
+```
+
+From the source:
+
+```typescript
+function castValue(value: string, trim?: boolean, number?: boolean | null) {
+  if (trim) value = value.trim()
+  if (number) value = looseToNumber(value)
+  return value
+}
+```
+
+### .trim
+
+Automatically trim whitespace:
+
+```vue
+<template>
+  <input v-model.trim="msg" />
+</template>
+```
+
+### Combining Modifiers
+
+```vue
+<template>
+  <input v-model.lazy.trim="msg" />
+  <input v-model.number.trim="age" type="number" />
+</template>
+```
+
+## v-model with Components
+
+Use `v-model` on custom components:
+
+<CodeGroup>
+```vue Parent Component
+<template>
+  <CustomInput v-model="searchText" />
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import CustomInput from './CustomInput.vue'
+
+const searchText = ref('')
+</script>
+```
+
+```vue CustomInput.vue
+<template>
+  <input
+    :value="modelValue"
+    @input="$emit('update:modelValue', $event.target.value)"
+  />
+</template>
+
+<script setup>
+defineProps(['modelValue'])
+defineEmits(['update:modelValue'])
+</script>
+```
+
+```vue Using useModel
+<template>
+  <input v-model="model" />
+</template>
+
+<script setup>
+import { useModel } from 'vue'
+
+const model = useModel()
+</script>
+```
+</CodeGroup>
+
+### Multiple v-model Bindings
+
+```vue
+<template>
+  <UserName
+    v-model:first-name="first"
+    v-model:last-name="last"
+  />
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const first = ref('')
+const last = ref('')
+</script>
+```
+
+## Form Validation Patterns
+
+<CodeGroup>
+```vue Basic Validation
+<template>
+  <form @submit.prevent="handleSubmit">
+    <div>
+      <input v-model="email" type="email" />
+      <span v-if="emailError" class="error">{{ emailError }}</span>
+    </div>
+    <button type="submit" :disabled="!isValid">Submit</button>
+  </form>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+
+const email = ref('')
+
+const emailError = computed(() => {
+  if (!email.value) return 'Email is required'
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) {
+    return 'Invalid email format'
+  }
+  return ''
+})
+
+const isValid = computed(() => !emailError.value)
+
+function handleSubmit() {
+  if (isValid.value) {
+    console.log('Form submitted:', email.value)
+  }
+}
+</script>
+```
+
+```vue Real-time Validation
+<template>
+  <div>
+    <input
+      v-model="password"
+      type="password"
+      @blur="validatePassword"
+    />
+    <ul v-if="touched">
+      <li :class="{ valid: hasMinLength }">At least 8 characters</li>
+      <li :class="{ valid: hasNumber }">Contains a number</li>
+      <li :class="{ valid: hasSpecial }">Contains special character</li>
+    </ul>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+
+const password = ref('')
+const touched = ref(false)
+
+const hasMinLength = computed(() => password.value.length >= 8)
+const hasNumber = computed(() => /\d/.test(password.value))
+const hasSpecial = computed(() => /[!@#$%^&*]/.test(password.value))
+
+function validatePassword() {
+  touched.value = true
+}
+</script>
+
+<style scoped>
+.valid { color: green; }
+</style>
+```
+</CodeGroup>
+
+## Complete Form Example
+
+```vue
+<template>
+  <form @submit.prevent="submitForm">
+    <div>
+      <label for="name">Name:</label>
+      <input id="name" v-model.trim="form.name" required />
+    </div>
+    
+    <div>
+      <label for="email">Email:</label>
+      <input id="email" v-model.trim="form.email" type="email" required />
+    </div>
+    
+    <div>
+      <label for="age">Age:</label>
+      <input id="age" v-model.number="form.age" type="number" min="0" />
+    </div>
+    
+    <div>
+      <label>Gender:</label>
+      <input type="radio" v-model="form.gender" value="male" id="male" />
+      <label for="male">Male</label>
+      <input type="radio" v-model="form.gender" value="female" id="female" />
+      <label for="female">Female</label>
+    </div>
+    
+    <div>
+      <label>Interests:</label>
+      <input type="checkbox" v-model="form.interests" value="coding" id="coding" />
+      <label for="coding">Coding</label>
+      <input type="checkbox" v-model="form.interests" value="music" id="music" />
+      <label for="music">Music</label>
+      <input type="checkbox" v-model="form.interests" value="sports" id="sports" />
+      <label for="sports">Sports</label>
+    </div>
+    
+    <div>
+      <label for="country">Country:</label>
+      <select id="country" v-model="form.country">
+        <option value="">Select a country</option>
+        <option value="us">United States</option>
+        <option value="uk">United Kingdom</option>
+        <option value="ca">Canada</option>
+      </select>
+    </div>
+    
+    <div>
+      <label for="message">Message:</label>
+      <textarea id="message" v-model="form.message" rows="4"></textarea>
+    </div>
+    
+    <div>
+      <input type="checkbox" v-model="form.terms" id="terms" required />
+      <label for="terms">I agree to the terms and conditions</label>
+    </div>
+    
+    <button type="submit">Submit</button>
+  </form>
+  
+  <pre>{{ form }}</pre>
+</template>
+
+<script setup>
+import { reactive } from 'vue'
+
+const form = reactive({
+  name: '',
+  email: '',
+  age: null,
+  gender: '',
+  interests: [],
+  country: '',
+  message: '',
+  terms: false
+})
+
+function submitForm() {
+  console.log('Form submitted:', form)
+  // Handle form submission
+}
+</script>
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use appropriate input types">
+    Always use the correct `type` attribute for inputs (email, number, tel, etc.) for better validation and mobile experience.
+  </Step>
+
+  <Step title="Provide initial values">
+    Initialize all form fields with appropriate default values to avoid undefined refs.
+    
+    ```typescript
+    const form = reactive({
+      name: '',
+      age: 0,
+      interests: [] // Array for checkboxes
+    })
+    ```
+  </Step>
+
+  <Step title="Use modifiers wisely">
+    Apply `.trim`, `.number`, and `.lazy` modifiers where appropriate to simplify data handling.
+  </Step>
+
+  <Step title="Validate on blur">
+    For better UX, validate fields on blur rather than on every keystroke.
+  </Step>
+</Steps>
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="Event Handling" icon="hand-pointer" href="/essentials/event-handling">
+    Handle form events and submissions
+  </Card>
+  
+  <Card title="Reactivity Fundamentals" icon="bolt" href="/essentials/reactivity-fundamentals">
+    Learn about ref() and reactive()
+  </Card>
+  
+  <Card title="Components Basics" icon="puzzle-piece" href="/essentials/components-basics">
+    Use v-model with custom components
+  </Card>
+</CardGroup>

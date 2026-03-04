@@ -1,0 +1,596 @@
+---
+title: Custom Renderer API
+---
+
+API for creating custom renderers that target platforms other than the DOM. This allows Vue to render to canvas, native mobile, terminals, or any custom platform.
+
+## createRenderer()
+
+Creates a custom renderer by providing platform-specific node operations. This is the core API for building renderers that target non-DOM environments.
+
+**Type Signature:**
+```ts
+function createRenderer<
+  HostNode = RendererNode,
+  HostElement = RendererElement
+>(
+  options: RendererOptions<HostNode, HostElement>
+): Renderer<HostElement>
+```
+
+<ParamField path="options" type="RendererOptions" required>
+  An object containing platform-specific implementations of node operations. See [RendererOptions](#rendereroptions) for details.
+</ParamField>
+
+### Generic Parameters
+
+<ParamField path="HostNode" type="type">
+  The type representing a node in your target platform (e.g., `Node` for DOM, `CanvasNode` for canvas).
+</ParamField>
+
+<ParamField path="HostElement" type="type">
+  The type representing an element in your target platform (e.g., `Element` for DOM).
+</ParamField>
+
+### Returns
+
+A Renderer object with `render()` and `createApp()` methods.
+
+**Renderer Interface:**
+```ts
+interface Renderer<HostElement = RendererElement> {
+  render: RootRenderFunction<HostElement>
+  createApp: CreateAppFunction<HostElement>
+}
+```
+
+### Basic Example
+
+```js
+import { createRenderer } from '@vue/runtime-core'
+
+const { render, createApp } = createRenderer({
+  createElement(tag) {
+    return { tag, children: [] }
+  },
+  insert(child, parent, anchor) {
+    if (anchor) {
+      const index = parent.children.indexOf(anchor)
+      parent.children.splice(index, 0, child)
+    } else {
+      parent.children.push(child)
+    }
+  },
+  remove(child) {
+    const parent = child.parentNode
+    if (parent) {
+      const index = parent.children.indexOf(child)
+      parent.children.splice(index, 1)
+    }
+  },
+  createText(text) {
+    return { text }
+  },
+  createComment(text) {
+    return { comment: text }
+  },
+  setText(node, text) {
+    node.text = text
+  },
+  setElementText(el, text) {
+    el.children = [{ text }]
+  },
+  parentNode(node) {
+    return node.parentNode
+  },
+  nextSibling(node) {
+    return node.nextSibling
+  },
+  patchProp(el, key, prevValue, nextValue) {
+    el[key] = nextValue
+  }
+})
+```
+
+### Canvas Renderer Example
+
+```js
+import { createRenderer } from '@vue/runtime-core'
+
+class CanvasElement {
+  constructor(type) {
+    this.type = type
+    this.props = {}
+    this.children = []
+  }
+  
+  draw(ctx, x, y) {
+    // Implement drawing logic
+  }
+}
+
+const { createApp } = createRenderer({
+  createElement(type) {
+    return new CanvasElement(type)
+  },
+  
+  insert(el, parent) {
+    parent.children.push(el)
+  },
+  
+  remove(el) {
+    const parent = el.parent
+    if (parent) {
+      const i = parent.children.indexOf(el)
+      parent.children.splice(i, 1)
+    }
+  },
+  
+  patchProp(el, key, prevValue, nextValue) {
+    el.props[key] = nextValue
+  },
+  
+  createText(text) {
+    return { text }
+  },
+  
+  createComment(text) {
+    return { comment: text }
+  },
+  
+  setText(node, text) {
+    node.text = text
+  },
+  
+  setElementText(el, text) {
+    el.textContent = text
+  },
+  
+  parentNode(node) {
+    return node.parent
+  },
+  
+  nextSibling(node) {
+    return null
+  }
+})
+
+// Use the custom renderer
+const app = createApp({
+  render() {
+    return h('rect', { x: 0, y: 0, width: 100, height: 100 })
+  }
+})
+
+app.mount(canvasElement)
+```
+
+---
+
+## RendererOptions
+
+The configuration object for creating a custom renderer. All platform-specific operations must be implemented.
+
+**Type Definition:**
+```ts
+interface RendererOptions<
+  HostNode = RendererNode,
+  HostElement = RendererElement
+> {
+  patchProp(
+    el: HostElement,
+    key: string,
+    prevValue: any,
+    nextValue: any,
+    namespace?: ElementNamespace,
+    parentComponent?: ComponentInternalInstance | null
+  ): void
+  
+  insert(
+    el: HostNode,
+    parent: HostElement,
+    anchor?: HostNode | null
+  ): void
+  
+  remove(el: HostNode): void
+  
+  createElement(
+    type: string,
+    namespace?: ElementNamespace,
+    isCustomizedBuiltIn?: string,
+    vnodeProps?: VNodeProps | null
+  ): HostElement
+  
+  createText(text: string): HostNode
+  
+  createComment(text: string): HostNode
+  
+  setText(node: HostNode, text: string): void
+  
+  setElementText(node: HostElement, text: string): void
+  
+  parentNode(node: HostNode): HostElement | null
+  
+  nextSibling(node: HostNode): HostNode | null
+  
+  querySelector?(selector: string): HostElement | null
+  
+  setScopeId?(el: HostElement, id: string): void
+  
+  cloneNode?(node: HostNode): HostNode
+  
+  insertStaticContent?(
+    content: string,
+    parent: HostElement,
+    anchor: HostNode | null,
+    namespace: ElementNamespace,
+    start?: HostNode | null,
+    end?: HostNode | null
+  ): [HostNode, HostNode]
+}
+```
+
+### Required Methods
+
+<ParamField path="patchProp" type="function" required>
+  Patches a property/attribute on an element.
+  
+  ```ts
+  patchProp(el, key, prevValue, nextValue, namespace?, parentComponent?)
+  ```
+  
+  - **el**: The element to patch
+  - **key**: Property/attribute name
+  - **prevValue**: Previous value
+  - **nextValue**: New value
+  - **namespace**: Optional namespace (svg, mathml)
+  - **parentComponent**: Optional parent component instance
+</ParamField>
+
+<ParamField path="insert" type="function" required>
+  Inserts a node into a parent, optionally before an anchor.
+  
+  ```ts
+  insert(el, parent, anchor?)
+  ```
+  
+  - **el**: The node to insert
+  - **parent**: The parent element
+  - **anchor**: Optional sibling to insert before
+</ParamField>
+
+<ParamField path="remove" type="function" required>
+  Removes a node from its parent.
+  
+  ```ts
+  remove(el)
+  ```
+  
+  - **el**: The node to remove
+</ParamField>
+
+<ParamField path="createElement" type="function" required>
+  Creates a new element node.
+  
+  ```ts
+  createElement(type, namespace?, isCustomizedBuiltIn?, vnodeProps?)
+  ```
+  
+  - **type**: Tag name or element type
+  - **namespace**: Optional namespace
+  - **isCustomizedBuiltIn**: For customized built-in elements
+  - **vnodeProps**: VNode props for element creation hints
+</ParamField>
+
+<ParamField path="createText" type="function" required>
+  Creates a text node.
+  
+  ```ts
+  createText(text)
+  ```
+  
+  - **text**: Text content
+</ParamField>
+
+<ParamField path="createComment" type="function" required>
+  Creates a comment node.
+  
+  ```ts
+  createComment(text)
+  ```
+  
+  - **text**: Comment content
+</ParamField>
+
+<ParamField path="setText" type="function" required>
+  Sets the text content of a text node.
+  
+  ```ts
+  setText(node, text)
+  ```
+  
+  - **node**: The text node
+  - **text**: New text content
+</ParamField>
+
+<ParamField path="setElementText" type="function" required>
+  Sets the text content of an element node.
+  
+  ```ts
+  setElementText(node, text)
+  ```
+  
+  - **node**: The element
+  - **text**: New text content
+</ParamField>
+
+<ParamField path="parentNode" type="function" required>
+  Returns the parent of a node.
+  
+  ```ts
+  parentNode(node) => HostElement | null
+  ```
+  
+  - **node**: The node
+</ParamField>
+
+<ParamField path="nextSibling" type="function" required>
+  Returns the next sibling of a node.
+  
+  ```ts
+  nextSibling(node) => HostNode | null
+  ```
+  
+  - **node**: The node
+</ParamField>
+
+### Optional Methods
+
+<ParamField path="querySelector" type="function">
+  Query for an element (used for mounting with CSS selector).
+  
+  ```ts
+  querySelector(selector) => HostElement | null
+  ```
+</ParamField>
+
+<ParamField path="setScopeId" type="function">
+  Sets a scope ID attribute for scoped CSS.
+  
+  ```ts
+  setScopeId(el, id)
+  ```
+</ParamField>
+
+<ParamField path="cloneNode" type="function">
+  Clones a node (used for optimization).
+  
+  ```ts
+  cloneNode(node) => HostNode
+  ```
+</ParamField>
+
+<ParamField path="insertStaticContent" type="function">
+  Inserts static content (used for hoisted static nodes).
+  
+  ```ts
+  insertStaticContent(content, parent, anchor, namespace, start?, end?) => [HostNode, HostNode]
+  ```
+</ParamField>
+
+---
+
+## createHydrationRenderer()
+
+Creates a custom renderer with hydration support. Used for server-side rendering scenarios.
+
+**Type Signature:**
+```ts
+function createHydrationRenderer(
+  options: RendererOptions<Node, Element>
+): HydrationRenderer
+
+interface HydrationRenderer extends Renderer<Element | ShadowRoot> {
+  hydrate: RootHydrateFunction
+}
+```
+
+<ParamField path="options" type="RendererOptions<Node, Element>" required>
+  Renderer options with DOM types (Node and Element).
+</ParamField>
+
+### Returns
+
+A HydrationRenderer with `render()`, `createApp()`, and `hydrate()` methods.
+
+### Example
+
+```js
+import { createHydrationRenderer } from '@vue/runtime-core'
+import { nodeOps } from './node-ops'
+import { patchProp } from './patch-prop'
+
+const { createApp, hydrate } = createHydrationRenderer({
+  ...nodeOps,
+  patchProp
+})
+
+export { createApp, hydrate }
+```
+
+---
+
+## Real-World Examples
+
+### Vue Native Renderer
+
+```js
+import { createRenderer } from '@vue/runtime-core'
+import { NativeElement } from './native-element'
+
+const { createApp } = createRenderer({
+  createElement(type) {
+    return new NativeElement(type)
+  },
+  
+  insert(el, parent, anchor) {
+    parent.insertBefore(el, anchor)
+  },
+  
+  remove(el) {
+    el.parent?.removeChild(el)
+  },
+  
+  patchProp(el, key, prevValue, nextValue) {
+    el.setAttribute(key, nextValue)
+  },
+  
+  createText(text) {
+    return new NativeTextNode(text)
+  },
+  
+  createComment() {
+    return null // Native platforms might not support comments
+  },
+  
+  setText(node, text) {
+    node.text = text
+  },
+  
+  setElementText(el, text) {
+    el.textContent = text
+  },
+  
+  parentNode(node) {
+    return node.parent
+  },
+  
+  nextSibling(node) {
+    return node.nextSibling
+  }
+})
+```
+
+### Terminal Renderer
+
+```js
+import { createRenderer } from '@vue/runtime-core'
+import blessed from 'blessed'
+
+const { createApp } = createRenderer({
+  createElement(type) {
+    switch (type) {
+      case 'box':
+        return blessed.box()
+      case 'text':
+        return blessed.text()
+      case 'list':
+        return blessed.list()
+      default:
+        return blessed.box()
+    }
+  },
+  
+  insert(el, parent) {
+    parent.append(el)
+  },
+  
+  remove(el) {
+    el.detach()
+  },
+  
+  patchProp(el, key, prevValue, nextValue) {
+    el[key] = nextValue
+  },
+  
+  createText(text) {
+    return blessed.text({ content: text })
+  },
+  
+  createComment() {
+    return null
+  },
+  
+  setText(node, text) {
+    node.setContent(text)
+  },
+  
+  setElementText(el, text) {
+    el.setContent(text)
+  },
+  
+  parentNode(node) {
+    return node.parent
+  },
+  
+  nextSibling(node) {
+    const parent = node.parent
+    const index = parent?.children.indexOf(node)
+    return parent?.children[index + 1] || null
+  }
+})
+
+// Create terminal UI
+const screen = blessed.screen()
+const app = createApp({
+  render() {
+    return h('box', { border: { type: 'line' } }, [
+      h('text', 'Hello Terminal!')
+    ])
+  }
+})
+
+app.mount(screen)
+screen.key(['escape', 'q', 'C-c'], () => process.exit(0))
+screen.render()
+```
+
+---
+
+## Best Practices
+
+### Performance
+
+- Implement `cloneNode()` for better static node handling
+- Implement `insertStaticContent()` for hoisted content optimization
+- Minimize work in frequently called methods like `patchProp()`
+
+### Type Safety
+
+```ts
+import { createRenderer } from '@vue/runtime-core'
+
+interface MyNode {
+  type: string
+  parent: MyElement | null
+}
+
+interface MyElement extends MyNode {
+  props: Record<string, any>
+  children: MyNode[]
+}
+
+const { createApp } = createRenderer<MyNode, MyElement>({
+  // Fully typed renderer options
+})
+```
+
+### Error Handling
+
+```js
+const { createApp } = createRenderer({
+  createElement(type) {
+    try {
+      return new CustomElement(type)
+    } catch (err) {
+      console.error(`Failed to create element: ${type}`, err)
+      throw err
+    }
+  },
+  // ... other methods
+})
+```
+
+<Note>
+Custom renderers allow Vue to target any platform. Vue's DOM renderer and server renderer are both built using this API.
+</Note>

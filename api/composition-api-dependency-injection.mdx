@@ -1,0 +1,379 @@
+---
+title: Dependency Injection
+---
+
+Vue's dependency injection system allows ancestor components to serve as dependency providers for all descendants, regardless of how deep the component hierarchy is.
+
+## provide()
+
+Provides a value that can be injected by descendant components.
+
+**Type Signature:**
+```ts
+function provide<T, K = InjectionKey<T> | string | number>(
+  key: K,
+  value: K extends InjectionKey<infer V> ? V : T
+): void
+```
+
+<ParamField path="key" type="InjectionKey<T> | string | number">
+  The injection key. Can be a string, symbol, or `InjectionKey`.
+</ParamField>
+
+<ParamField path="value" type="T">
+  The value to provide. Can be of any type, including reactive state.
+</ParamField>
+
+### Example
+
+```vue
+<script setup>
+import { ref, provide } from 'vue'
+
+const count = ref(0)
+
+// Provide with string key
+provide('count', count)
+
+// Provide with Symbol key (recommended for type safety)
+const CountKey = Symbol()
+provide(CountKey, count)
+</script>
+```
+
+### App-level Provide
+
+```js
+import { createApp } from 'vue'
+
+const app = createApp({})
+
+app.provide('message', 'hello')
+```
+
+### Providing Reactive Data
+
+```js
+import { ref, provide } from 'vue'
+
+const count = ref(0)
+
+// Descendants can react to changes
+provide('count', count)
+
+// Provide readonly to prevent modifications
+import { readonly } from 'vue'
+provide('count', readonly(count))
+```
+
+### Usage Notes
+
+- Must be called synchronously in `setup()` or `<script setup>`
+- Can only be called during component setup or application setup
+- If a component provides a value with the same key as an ancestor, it shadows the ancestor's value
+
+<Warning>
+`provide()` can only be used inside `setup()` or `<script setup>`.
+</Warning>
+
+---
+
+## inject()
+
+Injects a value provided by an ancestor component.
+
+**Type Signature:**
+```ts
+// Without default
+function inject<T>(key: InjectionKey<T> | string): T | undefined
+
+// With default value
+function inject<T>(
+  key: InjectionKey<T> | string,
+  defaultValue: T,
+  treatDefaultAsFactory?: false
+): T
+
+// With factory default
+function inject<T>(
+  key: InjectionKey<T> | string,
+  defaultValue: T | (() => T),
+  treatDefaultAsFactory: true
+): T
+```
+
+<ParamField path="key" type="InjectionKey<T> | string">
+  The injection key to look up.
+</ParamField>
+
+<ParamField path="defaultValue" type="T | (() => T)">
+  Optional default value to use when the injection is not found.
+</ParamField>
+
+<ParamField path="treatDefaultAsFactory" type="boolean">
+  When `true`, `defaultValue` is treated as a factory function.
+</ParamField>
+
+### Example
+
+```vue
+<script setup>
+import { inject } from 'vue'
+
+// Basic injection
+const count = inject('count')
+
+// With default value
+const count = inject('count', 0)
+
+// With factory function
+const state = inject('state', () => ({ count: 0 }), true)
+
+// Type-safe injection with InjectionKey
+import { InjectionKey } from 'vue'
+const CountKey: InjectionKey<number> = Symbol()
+const count = inject(CountKey) // count is typed as number | undefined
+</script>
+```
+
+### With Reactivity
+
+```js
+import { inject, ref } from 'vue'
+
+const count = inject('count')
+
+// If count is a ref, it remains reactive
+function increment() {
+  count.value++
+}
+```
+
+### Working with Defaults
+
+```js
+import { inject } from 'vue'
+
+// Simple default value
+const count = inject('count', 0)
+
+// Factory function (for objects/arrays)
+const state = inject('state', () => ({ count: 0 }), true)
+
+// Computed default
+import { computed } from 'vue'
+const value = inject('value', computed(() => someComputation()))
+```
+
+### Usage Notes
+
+- Must be called synchronously in `setup()` or `<script setup>`
+- Can also be called in functional components
+- Returns `undefined` if no provider was matched and no default value was provided
+- Supports app-level provides via `app.provide()`
+
+<Warning>
+If you're using async `setup()`, make sure to call `inject()` **before** the first `await` statement.
+</Warning>
+
+---
+
+## hasInjectionContext()
+
+Returns `true` if `inject()` can be used without warning about being called in the wrong place.
+
+**Type Signature:**
+```ts
+function hasInjectionContext(): boolean
+```
+
+### Example
+
+```js
+import { inject, hasInjectionContext } from 'vue'
+
+export function useMyComposable() {
+  if (!hasInjectionContext()) {
+    console.warn('useMyComposable must be called in setup()')
+    return
+  }
+  
+  const value = inject('key')
+  // ...
+}
+```
+
+### Use Cases
+
+- Used by libraries to check if they can safely call `inject()`
+- Useful for composables that may be called outside of setup context
+- Helps provide better error messages to users
+
+### Returns
+
+- `true` if called within:
+  - A component's `setup()` function
+  - A `<script setup>` block
+  - A functional component
+  - `app.runWithContext()` callback
+- `false` otherwise
+
+---
+
+## Type Safety with InjectionKey
+
+For better type safety, use `InjectionKey<T>` with symbols:
+
+### Defining Injection Keys
+
+```ts
+// keys.ts
+import { InjectionKey, Ref } from 'vue'
+
+export const CountKey: InjectionKey<Ref<number>> = Symbol('count')
+export const ThemeKey: InjectionKey<'light' | 'dark'> = Symbol('theme')
+```
+
+### Providing with Type Safety
+
+```vue
+<script setup lang="ts">
+import { ref, provide } from 'vue'
+import { CountKey } from './keys'
+
+const count = ref(0)
+
+// TypeScript ensures the value matches the key's type
+provide(CountKey, count)
+</script>
+```
+
+### Injecting with Type Safety
+
+```vue
+<script setup lang="ts">
+import { inject } from 'vue'
+import { CountKey } from './keys'
+
+// count is automatically typed as Ref<number> | undefined
+const count = inject(CountKey)
+
+// With default value, it's typed as Ref<number>
+const count = inject(CountKey, ref(0))
+</script>
+```
+
+---
+
+## Best Practices
+
+### Use Symbols for Keys
+
+```js
+// Avoid string keys for non-trivial apps
+provide('count', 0) // Not recommended
+
+// Use symbols to avoid key collisions
+const CountKey = Symbol('count')
+provide(CountKey, 0)
+```
+
+### Centralize Injection Keys
+
+```ts
+// keys.ts
+import { InjectionKey, Ref } from 'vue'
+
+export const userKey: InjectionKey<Ref<User>> = Symbol()
+export const themeKey: InjectionKey<Theme> = Symbol()
+```
+
+### Provide Readonly for Data Protection
+
+```js
+import { ref, provide, readonly } from 'vue'
+
+const count = ref(0)
+
+// Prevent descendants from modifying the value
+provide('count', readonly(count))
+
+// Provide methods for controlled modifications
+provide('increment', () => count.value++)
+```
+
+### Use Default Values
+
+```js
+import { inject } from 'vue'
+
+// Always provide a sensible default
+const count = inject('count', 0)
+
+// Or use a factory for complex defaults
+const config = inject('config', () => ({
+  theme: 'light',
+  locale: 'en'
+}), true)
+```
+
+### Create Composable Wrappers
+
+```ts
+// useTheme.ts
+import { inject, InjectionKey, Ref } from 'vue'
+
+const ThemeKey: InjectionKey<Ref<string>> = Symbol()
+
+export function provideTheme(theme: Ref<string>) {
+  provide(ThemeKey, theme)
+}
+
+export function useTheme() {
+  const theme = inject(ThemeKey)
+  if (!theme) {
+    throw new Error('No theme provided!')
+  }
+  return theme
+}
+```
+
+---
+
+## Comparison with Props
+
+### When to Use Provide/Inject
+
+- Passing data through many layers of components
+- Plugin or library integration
+- Theme, i18n, or other app-wide concerns
+- Avoid prop drilling
+
+### When to Use Props
+
+- Direct parent-child communication
+- Data is only used by immediate children
+- Explicit data flow is important
+- Better for component reusability
+
+### Example Comparison
+
+```vue
+<!-- Using Props (explicit but verbose) -->
+<Parent>
+  <Child :theme="theme">
+    <GrandChild :theme="theme">
+      <GreatGrandChild :theme="theme" />
+    </GrandChild>
+  </Child>
+</Parent>
+
+<!-- Using Provide/Inject (cleaner for deep hierarchies) -->
+<Parent> <!-- provide('theme', theme) -->
+  <Child>
+    <GrandChild>
+      <GreatGrandChild /> <!-- inject('theme') -->
+    </GrandChild>
+  </Child>
+</Parent>
+```

@@ -1,0 +1,405 @@
+---
+title: Conditional Rendering
+description: Learn how to conditionally render elements in Vue using v-if, v-else-if, v-else, and v-show directives.
+---
+
+Vue provides directives to conditionally render elements based on reactive state.
+
+## v-if Directive
+
+The `v-if` directive conditionally renders an element based on the truthiness of an expression:
+
+```vue
+<template>
+  <div>
+    <p v-if="isVisible">This is visible</p>
+    <button @click="isVisible = !isVisible">Toggle</button>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const isVisible = ref(true)
+</script>
+```
+
+<Note>
+  When `v-if` is false, the element and its children are **not rendered** in the DOM at all.
+</Note>
+
+## v-else Directive
+
+The `v-else` directive provides an "else block" for `v-if`:
+
+```vue
+<template>
+  <div>
+    <p v-if="isLoggedIn">Welcome back!</p>
+    <p v-else>Please log in</p>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const isLoggedIn = ref(false)
+</script>
+```
+
+<Warning>
+  A `v-else` element must immediately follow a `v-if` or `v-else-if` element - otherwise it won't be recognized.
+</Warning>
+
+## v-else-if Directive
+
+The `v-else-if` serves as an "else if block" for `v-if`:
+
+```vue
+<template>
+  <div>
+    <p v-if="type === 'A'">Type A</p>
+    <p v-else-if="type === 'B'">Type B</p>
+    <p v-else-if="type === 'C'">Type C</p>
+    <p v-else>Not A/B/C</p>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const type = ref('A')
+</script>
+```
+
+<Tip>
+  Chain multiple `v-else-if` blocks to create complex conditional rendering logic.
+</Tip>
+
+## v-if on template
+
+Because `v-if` is a directive, it must be attached to a single element. To conditionally render multiple elements, use `v-if` on a `<template>` element:
+
+```vue
+<template>
+  <div>
+    <template v-if="showDetails">
+      <h3>User Details</h3>
+      <p>Name: John Doe</p>
+      <p>Email: john@example.com</p>
+      <p>Role: Admin</p>
+    </template>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const showDetails = ref(true)
+</script>
+```
+
+The `<template>` element serves as an invisible wrapper and won't be rendered in the final DOM.
+
+## v-show Directive
+
+The `v-show` directive is an alternative to `v-if` for conditionally displaying an element:
+
+```vue
+<template>
+  <div>
+    <p v-show="isVisible">Toggle me</p>
+    <button @click="isVisible = !isVisible">Toggle</button>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const isVisible = ref(true)
+</script>
+```
+
+### v-show Implementation
+
+From `packages/runtime-dom/src/directives/vShow.ts`, `v-show` toggles the `display` CSS property:
+
+```typescript
+export const vShow: ObjectDirective<VShowElement> = {
+  beforeMount(el, { value }, { transition }) {
+    el[vShowOriginalDisplay] = el.style.display === 'none' ? '' : el.style.display
+    if (transition && value) {
+      transition.beforeEnter(el)
+    } else {
+      setDisplay(el, value)
+    }
+  },
+  // ...
+}
+
+function setDisplay(el: VShowElement, value: unknown): void {
+  el.style.display = value ? el[vShowOriginalDisplay] : 'none'
+}
+```
+
+<Note>
+  When using `v-show`, the element is always rendered in the DOM. Only the CSS `display` property is toggled.
+</Note>
+
+## v-if vs v-show
+
+<CodeGroup>
+```vue v-if - Conditional Rendering
+<template>
+  <!-- Element is added/removed from DOM -->
+  <div v-if="isVisible">
+    <ExpensiveComponent />
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const isVisible = ref(false)
+// ExpensiveComponent is not mounted until isVisible is true
+</script>
+```
+
+```vue v-show - Toggle Display
+<template>
+  <!-- Element always in DOM, display toggled -->
+  <div v-show="isVisible">
+    <ExpensiveComponent />
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const isVisible = ref(false)
+// ExpensiveComponent is mounted immediately
+</script>
+```
+</CodeGroup>
+
+### When to Use Which
+
+<Steps>
+  <Step title="Use v-if when:">
+    - The condition rarely changes
+    - You want true conditional rendering (lazy)
+    - The content is expensive to render
+    - You want to leverage conditional component lifecycle hooks
+  </Step>
+
+  <Step title="Use v-show when:">
+    - The condition changes frequently
+    - You need better toggle performance
+    - The element is simple and lightweight
+    - Initial render cost is more important than toggle cost
+  </Step>
+</Steps>
+
+<Tip>
+  **Performance comparison:**
+  - `v-if` has higher toggle cost (element creation/destruction)
+  - `v-if` has lower initial render cost (lazy)
+  - `v-show` has higher initial render cost (always rendered)
+  - `v-show` has lower toggle cost (CSS only)
+</Tip>
+
+## v-if with v-for
+
+<Warning>
+  Using `v-if` and `v-for` on the same element is **not recommended**. When used together on the same element, `v-if` has higher priority than `v-for`.
+</Warning>
+
+Instead, use a wrapper element:
+
+```vue
+<template>
+  <!-- Bad: v-if and v-for on same element -->
+  <li v-for="item in items" v-if="item.isActive" :key="item.id">
+    {{ item.name }}
+  </li>
+
+  <!-- Good: Use template wrapper -->
+  <template v-for="item in items" :key="item.id">
+    <li v-if="item.isActive">
+      {{ item.name }}
+    </li>
+  </template>
+
+  <!-- Better: Use computed property -->
+  <li v-for="item in activeItems" :key="item.id">
+    {{ item.name }}
+  </li>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+
+const items = ref([
+  { id: 1, name: 'Item 1', isActive: true },
+  { id: 2, name: 'Item 2', isActive: false },
+  { id: 3, name: 'Item 3', isActive: true }
+])
+
+const activeItems = computed(() => 
+  items.value.filter(item => item.isActive)
+)
+</script>
+```
+
+## Conditional Component Rendering
+
+You can conditionally render entire components:
+
+```vue
+<template>
+  <div>
+    <component :is="currentView" />
+    
+    <button @click="currentView = 'ComponentA'">Show A</button>
+    <button @click="currentView = 'ComponentB'">Show B</button>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import ComponentA from './ComponentA.vue'
+import ComponentB from './ComponentB.vue'
+
+const currentView = ref('ComponentA')
+</script>
+```
+
+Or use `v-if`:
+
+```vue
+<template>
+  <div>
+    <ComponentA v-if="view === 'A'" />
+    <ComponentB v-else-if="view === 'B'" />
+    <ComponentC v-else />
+  </div>
+</template>
+```
+
+## Conditional Rendering with Transitions
+
+Combine conditional rendering with Vue's transition system:
+
+```vue
+<template>
+  <div>
+    <button @click="show = !show">Toggle</button>
+    
+    <Transition name="fade">
+      <p v-if="show">Hello!</p>
+    </Transition>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const show = ref(true)
+</script>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
+```
+
+## Complex Conditional Logic
+
+For complex conditions, use computed properties:
+
+```vue
+<template>
+  <div>
+    <div v-if="canEditPost">
+      <button>Edit</button>
+      <button>Delete</button>
+    </div>
+    
+    <p v-if="errorMessage" class="error">
+      {{ errorMessage }}
+    </p>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+
+const user = ref({ role: 'admin', id: 1 })
+const post = ref({ authorId: 1, status: 'published' })
+
+const canEditPost = computed(() => {
+  return user.value.role === 'admin' || 
+         user.value.id === post.value.authorId
+})
+
+const errorMessage = computed(() => {
+  if (!user.value) return 'Please log in'
+  if (post.value.status === 'archived') return 'Cannot edit archived posts'
+  return null
+})
+</script>
+```
+
+## Key Attribute with Conditional Rendering
+
+Use the `key` attribute to force Vue to replace elements instead of reusing them:
+
+```vue
+<template>
+  <div>
+    <label>
+      <input v-if="loginType === 'username'" key="username" placeholder="Username" />
+      <input v-else key="email" placeholder="Email" />
+    </label>
+    
+    <button @click="toggleLoginType">Toggle</button>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const loginType = ref('username')
+
+function toggleLoginType() {
+  loginType.value = loginType.value === 'username' ? 'email' : 'username'
+}
+</script>
+```
+
+<Note>
+  Without the `key` attribute, Vue would reuse the input element and only update its attributes. With `key`, Vue creates a new element each time.
+</Note>
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="List Rendering" icon="list" href="/essentials/list-rendering">
+    Render lists with v-for directive
+  </Card>
+  
+  <Card title="Template Syntax" icon="code" href="/essentials/template-syntax">
+    Learn Vue's template syntax
+  </Card>
+  
+  <Card title="Computed Properties" icon="calculator" href="/essentials/computed-properties">
+    Use computed for complex conditions
+  </Card>
+</CardGroup>

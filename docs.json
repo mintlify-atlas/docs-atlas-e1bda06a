@@ -1,122 +1,159 @@
 {
   "$schema": "https://mintlify.com/docs.json",
+  "name": "Vue.js",
   "theme": "mint",
-  "name": "Mint Starter Kit",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#48b486",
+    "light": "#eef8f5",
+    "dark": "#324b5b"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "/favicon.jpg",
+  "logo": {
+    "light": "/logo-light.svg",
+    "dark": "/logo-dark.svg"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/vuejs/core"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/vuejs/core",
+      "x": "https://x.com/vuejs",
+      "website": "https://vuejs.org"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "installation",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Essentials",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "essentials/creating-applications",
+              "essentials/template-syntax",
+              "essentials/reactivity-fundamentals",
+              "essentials/computed-properties",
+              "essentials/conditional-rendering",
+              "essentials/list-rendering",
+              "essentials/event-handling",
+              "essentials/forms",
+              "essentials/lifecycle-hooks",
+              "essentials/watchers",
+              "essentials/template-refs",
+              "essentials/components-basics"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Components In-Depth",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "components/registration",
+              "components/props",
+              "components/events",
+              "components/slots",
+              "components/provide-inject",
+              "components/async-components"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Reusability",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "reusability/composables",
+              "reusability/custom-directives",
+              "reusability/plugins"
+            ]
+          },
+          {
+            "group": "Built-in Components",
+            "pages": [
+              "built-ins/transition",
+              "built-ins/transition-group",
+              "built-ins/keep-alive",
+              "built-ins/teleport",
+              "built-ins/suspense"
+            ]
+          },
+          {
+            "group": "Scaling Up",
+            "pages": [
+              "scaling-up/single-file-components",
+              "scaling-up/tooling",
+              "scaling-up/routing",
+              "scaling-up/state-management",
+              "scaling-up/testing",
+              "scaling-up/server-side-rendering"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Global API",
             "pages": [
-              "api-reference/introduction"
+              "api/application",
+              "api/general"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Composition API",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/composition-api-setup",
+              "api/composition-api-lifecycle",
+              "api/composition-api-dependency-injection",
+              "api/composition-api-helpers"
+            ]
+          },
+          {
+            "group": "Reactivity API",
+            "pages": [
+              "api/reactivity-core",
+              "api/reactivity-utilities",
+              "api/reactivity-advanced"
+            ]
+          },
+          {
+            "group": "Options API",
+            "pages": [
+              "api/options-state",
+              "api/options-rendering",
+              "api/options-lifecycle",
+              "api/options-composition",
+              "api/options-misc"
+            ]
+          },
+          {
+            "group": "Compiler & SFC",
+            "pages": [
+              "api/sfc-spec",
+              "api/sfc-script-setup",
+              "api/sfc-css-features",
+              "api/compile-time-flags"
+            ]
+          },
+          {
+            "group": "Advanced APIs",
+            "pages": [
+              "api/render-function",
+              "api/server-side-rendering",
+              "api/custom-renderer",
+              "api/custom-elements"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

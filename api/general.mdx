@@ -1,0 +1,480 @@
+---
+title: General API
+description: General-purpose Vue.js API functions
+---
+
+## version
+
+Exposes the current version of Vue.
+
+```ts
+const version: string
+```
+
+**Example:**
+
+```js
+import { version } from 'vue'
+
+console.log(version) // '3.5.0'
+```
+
+---
+
+## nextTick()
+
+Wait for the next DOM update flush.
+
+<ParamField path="fn" type="() => T | Promise<T>">
+  Optional callback to execute after the next DOM update.
+</ParamField>
+
+<ResponseField name="return" type="Promise<void | T>">
+  Returns a promise that resolves after the next DOM update. If a callback is provided, resolves to the callback's return value.
+</ResponseField>
+
+```ts
+function nextTick(): Promise<void>
+function nextTick<T, R>(this: T, fn: (this: T) => R | Promise<R>): Promise<R>
+```
+
+**Example:**
+
+```js
+import { ref, nextTick } from 'vue'
+
+const count = ref(0)
+
+async function increment() {
+  count.value++
+  
+  // DOM not yet updated
+  console.log(document.getElementById('counter').textContent) // 0
+  
+  await nextTick()
+  
+  // DOM is now updated
+  console.log(document.getElementById('counter').textContent) // 1
+}
+```
+
+**Example with callback:**
+
+```js
+import { nextTick } from 'vue'
+
+count.value++
+
+nextTick(() => {
+  // Access updated DOM
+  console.log('DOM updated')
+})
+```
+
+**In Options API:**
+
+```js
+export default {
+  methods: {
+    async updateAndLog() {
+      this.message = 'Updated'
+      await this.$nextTick()
+      console.log(this.$el.textContent) // 'Updated'
+    }
+  }
+}
+```
+
+---
+
+## defineComponent()
+
+Defines a component with type inference.
+
+<ParamField path="options" type="ComponentOptions | SetupFunction" required>
+  Component options object or setup function.
+</ParamField>
+
+<ResponseField name="return" type="DefineComponent">
+  Returns the component definition with proper type inference.
+</ResponseField>
+
+```ts
+// Overload 1: Direct setup function
+function defineComponent<Props, E extends EmitsOptions = {}>(
+  setup: (props: Props, ctx: SetupContext<E>) => RenderFunction | Promise<RenderFunction>,
+  options?: Pick<ComponentOptions, 'name' | 'inheritAttrs'> & {
+    props?: ComponentObjectPropsOptions<Props> | (keyof Props)[]
+    emits?: E | string[]
+    slots?: SlotsType
+  }
+): DefineSetupFnComponent<Props, E>
+
+// Overload 2: Options object
+function defineComponent<Props, RawBindings, D, C, M>(options: ComponentOptions): DefineComponent
+```
+
+**Example with Options API:**
+
+```js
+import { defineComponent } from 'vue'
+
+export default defineComponent({
+  name: 'MyComponent',
+  props: {
+    message: String,
+    count: Number
+  },
+  data() {
+    return {
+      localState: 0
+    }
+  },
+  computed: {
+    doubleCount() {
+      return this.count * 2
+    }
+  },
+  methods: {
+    increment() {
+      this.localState++
+    }
+  }
+})
+```
+
+**Example with Composition API setup function:**
+
+```js
+import { defineComponent, ref } from 'vue'
+
+export default defineComponent(
+  (props) => {
+    const count = ref(0)
+    
+    function increment() {
+      count.value++
+    }
+    
+    return () => (
+      <div onClick={increment}>
+        {props.message}: {count.value}
+      </div>
+    )
+  },
+  {
+    props: {
+      message: String
+    }
+  }
+)
+```
+
+**Example with TypeScript:**
+
+```ts
+import { defineComponent, type PropType } from 'vue'
+
+interface User {
+  id: number
+  name: string
+}
+
+export default defineComponent({
+  props: {
+    user: {
+      type: Object as PropType<User>,
+      required: true
+    },
+    tags: {
+      type: Array as PropType<string[]>,
+      default: () => []
+    }
+  },
+  setup(props) {
+    // props.user is typed as User
+    // props.tags is typed as string[]
+    console.log(props.user.name)
+  }
+})
+```
+
+<Note>
+  `defineComponent()` is primarily a type helper - it doesn't change runtime behavior. It provides better type inference for IDE support and TypeScript.
+</Note>
+
+---
+
+## defineAsyncComponent()
+
+Defines an async component that is lazy-loaded.
+
+<ParamField path="source" type="AsyncComponentLoader | AsyncComponentOptions" required>
+  Either a loader function that returns a Promise, or an options object.
+</ParamField>
+
+<ResponseField name="return" type="Component">
+  Returns an async component definition.
+</ResponseField>
+
+```ts
+type AsyncComponentLoader<T = any> = () => Promise<T | { default: T }>
+
+interface AsyncComponentOptions<T = any> {
+  loader: AsyncComponentLoader<T>
+  loadingComponent?: Component
+  errorComponent?: Component
+  delay?: number
+  timeout?: number
+  suspensible?: boolean
+  hydrate?: HydrationStrategy
+  onError?: (
+    error: Error,
+    retry: () => void,
+    fail: () => void,
+    attempts: number
+  ) => any
+}
+
+function defineAsyncComponent<T extends Component = { new (): ComponentPublicInstance }>(
+  source: AsyncComponentLoader<T> | AsyncComponentOptions<T>
+): T
+```
+
+**Example with loader function:**
+
+```js
+import { defineAsyncComponent } from 'vue'
+
+const AsyncComp = defineAsyncComponent(() =>
+  import('./components/MyComponent.vue')
+)
+```
+
+**Example with options:**
+
+```js
+import { defineAsyncComponent } from 'vue'
+import LoadingComponent from './LoadingComponent.vue'
+import ErrorComponent from './ErrorComponent.vue'
+
+const AsyncComp = defineAsyncComponent({
+  // The loader function
+  loader: () => import('./components/HeavyComponent.vue'),
+  
+  // A component to use while the async component is loading
+  loadingComponent: LoadingComponent,
+  
+  // Delay before showing the loading component. Default: 200ms.
+  delay: 200,
+  
+  // A component to use if the load fails
+  errorComponent: ErrorComponent,
+  
+  // Timeout for loading. Default: Infinity.
+  timeout: 3000,
+  
+  // Whether to use Suspense. Default: true
+  suspensible: false,
+  
+  // Error handler
+  onError(error, retry, fail, attempts) {
+    if (error.message.match(/fetch/) && attempts <= 3) {
+      // Retry on fetch errors, max 3 attempts
+      retry()
+    } else {
+      fail()
+    }
+  }
+})
+```
+
+**Using in template:**
+
+```vue
+<template>
+  <Suspense>
+    <AsyncComp />
+    <template #fallback>
+      Loading...
+    </template>
+  </Suspense>
+</template>
+
+<script setup>
+import { defineAsyncComponent } from 'vue'
+
+const AsyncComp = defineAsyncComponent(() =>
+  import('./HeavyComponent.vue')
+)
+</script>
+```
+
+**With router:**
+
+```js
+import { defineAsyncComponent } from 'vue'
+
+const routes = [
+  {
+    path: '/about',
+    component: defineAsyncComponent(() => import('./views/About.vue'))
+  }
+]
+```
+
+---
+
+## h()
+
+Creates virtual DOM nodes (vnodes).
+
+<ParamField path="type" type="string | Component" required>
+  Can be a string (for HTML tags) or a Component definition.
+</ParamField>
+
+<ParamField path="props" type="object | null">
+  An object containing props, attributes, DOM properties, and event listeners.
+</ParamField>
+
+<ParamField path="children" type="string | Array | object">
+  Child vnodes, text, or slots.
+</ParamField>
+
+<ResponseField name="return" type="VNode">
+  Returns a virtual node.
+</ResponseField>
+
+```ts
+// Element
+function h(type: string, children?: RawChildren): VNode
+function h(
+  type: string,
+  props?: RawProps | null,
+  children?: RawChildren | RawSlots
+): VNode
+
+// Component
+function h(type: Component, children?: RawChildren): VNode
+function h<P>(
+  type: Component<P>,
+  props?: (RawProps & P) | null,
+  children?: RawChildren | RawSlots
+): VNode
+```
+
+**Example with HTML elements:**
+
+```js
+import { h } from 'vue'
+
+// Type only
+h('div')
+
+// Type + props
+h('div', { id: 'foo', class: 'bar' })
+
+// Type + children
+h('div', [
+  h('span', 'hello'),
+  h('span', 'world')
+])
+
+// Type + props + children
+h('div', { class: 'container' }, [
+  h('h1', 'Title'),
+  h('p', 'Content')
+])
+```
+
+**Example with text:**
+
+```js
+h('div', 'Hello World')
+```
+
+**Example with components:**
+
+```js
+import { h } from 'vue'
+import MyComponent from './MyComponent.vue'
+
+// Component without props
+h(MyComponent)
+
+// Component with props
+h(MyComponent, {
+  message: 'Hello',
+  count: 42
+})
+
+// Component with slots
+h(MyComponent, null, {
+  default: () => 'Default slot content',
+  header: () => h('h1', 'Header')
+})
+```
+
+**Example with event listeners:**
+
+```js
+h('button', {
+  onClick: () => console.log('clicked'),
+  onMouseover: (e) => console.log('hover')
+}, 'Click me')
+```
+
+**Example in render function:**
+
+```js
+import { h, ref } from 'vue'
+
+export default {
+  setup() {
+    const count = ref(0)
+    
+    return () => h('div', [
+      h('h1', `Count: ${count.value}`),
+      h('button', {
+        onClick: () => count.value++
+      }, 'Increment')
+    ])
+  }
+}
+```
+
+**Example with nested components:**
+
+```js
+import { h } from 'vue'
+import Parent from './Parent.vue'
+import Child from './Child.vue'
+
+export default {
+  render() {
+    return h(Parent, null, {
+      default: () => [
+        h(Child, { msg: 'Child 1' }),
+        h(Child, { msg: 'Child 2' })
+      ]
+    })
+  }
+}
+```
+
+**With JSX (requires plugin):**
+
+```jsx
+import { defineComponent } from 'vue'
+
+export default defineComponent({
+  setup() {
+    // h() is called automatically by JSX transform
+    return () => <div class="container">Hello</div>
+  }
+})
+```
+
+<Note>
+  When using single-file components (SFCs), you typically don't need to use `h()` directly. However, it's essential for programmatic render functions and provides maximum flexibility.
+</Note>

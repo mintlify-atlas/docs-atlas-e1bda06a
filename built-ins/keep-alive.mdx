@@ -1,0 +1,227 @@
+---
+title: <KeepAlive>
+description: Cache and preserve component state when dynamically switching between components
+---
+
+The `<KeepAlive>` component caches component instances when dynamically switching between multiple components, preserving their state and avoiding re-renders.
+
+## Basic Usage
+
+```vue
+<KeepAlive>
+  <component :is="activeComponent" />
+</KeepAlive>
+```
+
+When wrapped in `<KeepAlive>`, component instances are cached instead of being destroyed when they become inactive.
+
+## Props
+
+### include
+
+- **Type:** `string | RegExp | Array<string | RegExp>`
+
+Only components with matching names will be cached. Names are matched against the component's `name` option.
+
+```vue
+<!-- Comma-separated string -->
+<KeepAlive include="ComponentA,ComponentB">
+  <component :is="view" />
+</KeepAlive>
+
+<!-- RegExp (use `v-bind`) -->
+<KeepAlive :include="/ComponentA|ComponentB/">
+  <component :is="view" />
+</KeepAlive>
+
+<!-- Array (use `v-bind`) -->
+<KeepAlive :include="['ComponentA', 'ComponentB']">
+  <component :is="view" />
+</KeepAlive>
+```
+
+### exclude
+
+- **Type:** `string | RegExp | Array<string | RegExp>`
+
+Components with matching names will not be cached.
+
+```vue
+<KeepAlive exclude="ComponentC">
+  <component :is="view" />
+</KeepAlive>
+```
+
+### max
+
+- **Type:** `number | string`
+
+The maximum number of component instances to cache. Once this limit is reached, the least recently used cached instance will be destroyed before creating a new one.
+
+```vue
+<KeepAlive :max="10">
+  <component :is="view" />
+</KeepAlive>
+```
+
+## Lifecycle Hooks
+
+Cached components have access to two special lifecycle hooks:
+
+### onActivated
+
+Called when a cached component instance is inserted into the DOM.
+
+```vue
+<script setup>
+import { onActivated } from 'vue'
+
+onActivated(() => {
+  // called on initial mount
+  // and every time it is re-inserted from the cache
+  console.log('Component activated')
+})
+</script>
+```
+
+### onDeactivated
+
+Called when a cached component instance is removed from the DOM.
+
+```vue
+<script setup>
+import { onDeactivated } from 'vue'
+
+onDeactivated(() => {
+  // called when removed from the DOM into the cache
+  // and also when unmounted
+  console.log('Component deactivated')
+})
+</script>
+```
+
+<Note>
+- `onActivated` is called on initial mount and every time the component is re-inserted from the cache.
+- `onDeactivated` is called when the component is removed from the DOM and also when the entire `KeepAlive` tree is unmounted.
+- Both hooks work for the entire component tree, not just the root component wrapped by `<KeepAlive>`.
+</Note>
+
+## Usage with `v-if` / `v-else`
+
+```vue
+<KeepAlive>
+  <ComponentA v-if="condition" />
+  <ComponentB v-else />
+</KeepAlive>
+```
+
+## Usage with `<Transition>`
+
+```vue
+<Transition>
+  <KeepAlive>
+    <component :is="view" />
+  </KeepAlive>
+</Transition>
+```
+
+## Caching with Router Views
+
+`<KeepAlive>` is commonly used with Vue Router to cache route components:
+
+```vue
+<router-view v-slot="{ Component }">
+  <KeepAlive>
+    <component :is="Component" />
+  </KeepAlive>
+</router-view>
+```
+
+### Conditional Caching by Route
+
+You can use route meta fields to selectively cache routes:
+
+```vue
+<router-view v-slot="{ Component, route }">
+  <KeepAlive>
+    <component :is="Component" :key="route.path" v-if="route.meta.keepAlive" />
+  </KeepAlive>
+  <component :is="Component" :key="route.path" v-if="!route.meta.keepAlive" />
+</router-view>
+```
+
+## Component Name Matching
+
+For `include` and `exclude` to work properly, components must have a `name` option:
+
+```js
+// Using Options API
+export default {
+  name: 'MyComponent',
+  // ...
+}
+
+// Using script setup with explicit name
+import { defineOptions } from 'vue'
+
+defineOptions({
+  name: 'MyComponent'
+})
+```
+
+<Note>
+When using Single-File Components with `<script setup>`, the component name is inferred from the filename by default. For explicit control, use `defineOptions({ name: 'ComponentName' })`.
+</Note>
+
+## Cache Management
+
+The cache uses an LRU (Least Recently Used) strategy when the `max` prop is set:
+
+1. When a new component is cached and the limit is reached, the least recently accessed cached component is destroyed.
+2. Each time a cached component is accessed, it's marked as most recently used.
+3. Keys are tracked in insertion order, with recently used keys moved to the end.
+
+## Implementation Details
+
+- **Cache Storage**: Uses a `Map` to store cached VNode instances (implementation at `/packages/runtime-core/src/components/KeepAlive.ts:111`).
+- **Component Detection**: Matches against `getComponentName()` which checks the `name` option or async component resolution.
+- **State Preservation**: Cached components preserve:
+  - Component instance state
+  - DOM elements
+  - Component tree structure
+
+## Single Child Requirement
+
+<Warning>
+`<KeepAlive>` should contain exactly one direct child component. If there are multiple children, only the first one will be cached, and a warning will be emitted in development mode.
+</Warning>
+
+```vue
+<!-- Correct: Single child -->
+<KeepAlive>
+  <component :is="view" />
+</KeepAlive>
+
+<!-- Wrong: Multiple children -->
+<KeepAlive>
+  <ComponentA />
+  <ComponentB />
+</KeepAlive>
+```
+
+## Server-Side Rendering
+
+On the server, `<KeepAlive>` simply renders its child component without any caching behavior, as caching is only meaningful on the client side.
+
+## Source Reference
+
+- **Package:** `@vue/runtime-core`
+- **Implementation:** `/packages/runtime-core/src/components/KeepAlive.ts:79-374`
+- **Props Interface:** `/packages/runtime-core/src/components/KeepAlive.ts:54-58`
+- **Lifecycle Hooks:** `/packages/runtime-core/src/components/KeepAlive.ts:408-420`
+
+## See Also
+
+- [onActivated API](/api/lifecycle#onactivated)
+- [onDeactivated API](/api/lifecycle#ondeactivated)
+- [Guide: KeepAlive](/built-ins/keep-alive)
