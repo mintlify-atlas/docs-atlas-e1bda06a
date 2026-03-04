@@ -415,3 +415,83 @@ const hugeList = markRaw([
 
 **See also:**
 - [Advanced - markRaw](/api/reactivity-advanced#integration-with-external-state-systems)
+
+---
+
+## toReactive()
+
+Returns a reactive proxy of the object. If the value is already reactive, it is returned as-is.
+
+<ParamField path="object" type="T extends object" required>
+  The object to convert to a reactive proxy.
+</ParamField>
+
+**Type:**
+```typescript
+function toReactive<T>(value: T): UnwrapNestedRefs<T>
+```
+
+**Returns:** `UnwrapNestedRefs<T>` - A reactive proxy of the object, or the value as-is if not an object
+
+**Example:**
+```javascript
+import { toReactive, isReactive } from 'vue'
+
+const obj = { count: 0 }
+const reactiveObj = toReactive(obj)
+console.log(isReactive(reactiveObj)) // true
+
+// If already reactive, returns as-is
+const existing = reactive({ count: 0 })
+console.log(toReactive(existing) === existing) // true
+
+// Non-objects are returned as-is
+console.log(toReactive(1)) // 1
+console.log(toReactive('hello')) // 'hello'
+```
+
+**Details:**
+- This is a convenience method for normalizing values to reactive proxies
+- If the input is already reactive, it returns the same reference
+- If the input is not an object (primitives), it returns the value unchanged
+- Internally converts the object using `reactive()` if not already reactive
+
+---
+
+## toReadonly()
+
+Returns a readonly proxy of the object. If the value is already readonly, it is returned as-is.
+
+<ParamField path="object" type="T extends object" required>
+  The object to convert to a readonly proxy.
+</ParamField>
+
+**Type:**
+```typescript
+function toReadonly<T>(value: T): DeepReadonly<UnwrapNestedRefs<T>>
+```
+
+**Returns:** `DeepReadonly<UnwrapNestedRefs<T>>` - A readonly proxy of the object, or the value as-is if not an object
+
+**Example:**
+```javascript
+import { toReadonly, isReadonly } from 'vue'
+
+const obj = { count: 0 }
+const readonlyObj = toReadonly(obj)
+console.log(isReadonly(readonlyObj)) // true
+
+// If already readonly, returns as-is
+const existing = readonly({ count: 0 })
+console.log(toReadonly(existing) === existing) // true
+
+// Non-objects are returned as-is
+console.log(toReadonly(1)) // 1
+console.log(toReadonly('hello')) // 'hello'
+```
+
+**Details:**
+- This is a convenience method for normalizing values to readonly proxies
+- If the input is already readonly, it returns the same reference
+- If the input is not an object (primitives), it returns the value unchanged
+- Internally converts the object using `readonly()` if not already readonly
