@@ -1,0 +1,181 @@
+{
+  "projectType": "framework",
+  "projectName": "Vue.js",
+  "projectDescription": "A progressive JavaScript framework for building modern web user interfaces",
+  "theme": "mint",
+  "primaryColor": "#48b486",
+  "lightColor": "#eef8f5",
+  "darkColor": "#324b5b",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Essentials",
+            "pages": [
+              "essentials/creating-applications",
+              "essentials/template-syntax",
+              "essentials/reactivity-fundamentals",
+              "essentials/computed-properties",
+              "essentials/conditional-rendering",
+              "essentials/list-rendering",
+              "essentials/event-handling",
+              "essentials/forms",
+              "essentials/lifecycle-hooks",
+              "essentials/watchers",
+              "essentials/template-refs",
+              "essentials/components-basics"
+            ]
+          },
+          {
+            "group": "Components In-Depth",
+            "pages": [
+              "components/registration",
+              "components/props",
+              "components/events",
+              "components/slots",
+              "components/provide-inject",
+              "components/async-components"
+            ]
+          },
+          {
+            "group": "Reusability",
+            "pages": [
+              "reusability/composables",
+              "reusability/custom-directives",
+              "reusability/plugins"
+            ]
+          },
+          {
+            "group": "Built-in Components",
+            "pages": [
+              "built-ins/transition",
+              "built-ins/transition-group",
+              "built-ins/keep-alive",
+              "built-ins/teleport",
+              "built-ins/suspense"
+            ]
+          },
+          {
+            "group": "Scaling Up",
+            "pages": [
+              "scaling-up/single-file-components",
+              "scaling-up/tooling",
+              "scaling-up/routing",
+              "scaling-up/state-management",
+              "scaling-up/testing",
+              "scaling-up/server-side-rendering"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Global API",
+            "pages": [
+              "api/application",
+              "api/general"
+            ]
+          },
+          {
+            "group": "Composition API",
+            "pages": [
+              "api/composition-api-setup",
+              "api/composition-api-lifecycle",
+              "api/composition-api-dependency-injection",
+              "api/composition-api-helpers"
+            ]
+          },
+          {
+            "group": "Reactivity API",
+            "pages": [
+              "api/reactivity-core",
+              "api/reactivity-utilities",
+              "api/reactivity-advanced"
+            ]
+          },
+          {
+            "group": "Options API",
+            "pages": [
+              "api/options-state",
+              "api/options-rendering",
+              "api/options-lifecycle",
+              "api/options-composition",
+              "api/options-misc"
+            ]
+          },
+          {
+            "group": "Compiler & SFC",
+            "pages": [
+              "api/sfc-spec",
+              "api/sfc-script-setup",
+              "api/sfc-css-features",
+              "api/compile-time-flags"
+            ]
+          },
+          {
+            "group": "Advanced APIs",
+            "pages": [
+              "api/render-function",
+              "api/server-side-rendering",
+              "api/custom-renderer",
+              "api/custom-elements"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Reactive data binding with efficient change detection",
+    "Component-based architecture with single-file components",
+    "Virtual DOM with optimized rendering and compiler",
+    "Template syntax with directives and declarative rendering",
+    "Composition API for flexible code organization",
+    "Server-side rendering and hydration support",
+    "Built-in transitions and animations",
+    "Comprehensive tooling and ecosystem"
+  ],
+  "publicApiSurface": [
+    "createApp()",
+    "createSSRApp()",
+    "defineComponent()",
+    "defineAsyncComponent()",
+    "ref()",
+    "reactive()",
+    "computed()",
+    "watch()",
+    "watchEffect()",
+    "onMounted()",
+    "onUpdated()",
+    "onUnmounted()",
+    "provide()",
+    "inject()",
+    "nextTick()",
+    "h()",
+    "compile()",
+    "Transition",
+    "TransitionGroup",
+    "KeepAlive",
+    "Teleport",
+    "Suspense",
+    "v-if",
+    "v-for",
+    "v-model",
+    "v-bind",
+    "v-on",
+    "v-show",
+    "v-slot"
+  ]
+}
